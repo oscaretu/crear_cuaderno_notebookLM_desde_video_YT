@@ -35,7 +35,7 @@ import yt_dlp
 from notebooklm import NotebookLMClient
 
 # Versión del programa
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 
 # Variable global para modo debug
 DEBUG = False
@@ -274,7 +274,17 @@ async def generar_artefactos(client, notebook_id: str, faltantes: list[str], idi
         try:
             status = await generar_func(notebook_id, **kwargs)
             debug(f"    Status recibido: {status}")
-            if status and hasattr(status, 'task_id'):
+
+            # Verificar si la generación falló inmediatamente
+            if status and getattr(status, 'status', None) == 'failed':
+                error_msg = getattr(status, 'error', 'Error desconocido')
+                hora_fin = timestamp()
+                print(f"  [{hora_fin}] ✗ Rechazado: {nombre} - {error_msg}")
+                debug(f"    {nombre} rechazado por la API")
+                return False
+
+            # Esperar completado si tenemos un task_id válido
+            if status and getattr(status, 'task_id', None):
                 debug(f"    Esperando completado de task_id: {status.task_id}")
                 await client.artifacts.wait_for_completion(notebook_id, status.task_id)
             hora_fin = timestamp()
