@@ -155,9 +155,26 @@ TIPOS_ARTEFACTOS = {
 }
 
 
-async def verificar_artefactos_existentes(client, notebook_id: str) -> dict:
-    """Verifica qué artefactos ya existen en el cuaderno. Devuelve info de cada uno."""
-    debug(f"Verificando artefactos en notebook: {notebook_id}")
+def artefacto_tiene_idioma(artefacto, idioma: str) -> bool:
+    """Verifica si un artefacto está en el idioma especificado."""
+    # Intentar obtener el idioma del artefacto
+    lang = getattr(artefacto, 'language', None)
+    if lang:
+        debug(f"      Artefacto tiene language={lang}, buscando={idioma}")
+        return lang.lower().startswith(idioma.lower())
+
+    # Si no hay atributo language, intentar detectar por título
+    title = getattr(artefacto, 'title', '') or ''
+    debug(f"      Artefacto sin language, título={title}")
+
+    # Heurística: algunos títulos incluyen indicadores de idioma
+    # Por ahora, si no podemos determinar el idioma, asumimos que coincide
+    return True
+
+
+async def verificar_artefactos_existentes(client, notebook_id: str, idioma: str = 'es') -> dict:
+    """Verifica qué artefactos ya existen en el cuaderno en el idioma especificado."""
+    debug(f"Verificando artefactos en notebook: {notebook_id} (idioma: {idioma})")
     existentes = {
         'report': None,
         'audio': None,
@@ -172,7 +189,12 @@ async def verificar_artefactos_existentes(client, notebook_id: str) -> dict:
             reports = await client.artifacts.list_reports(notebook_id)
             debug(f"    Reports encontrados: {len(reports) if reports else 0}")
             if reports:
-                existentes['report'] = reports[0]
+                # Buscar uno en el idioma correcto
+                for report in reports:
+                    if artefacto_tiene_idioma(report, idioma):
+                        existentes['report'] = report
+                        debug(f"    Report en idioma {idioma} encontrado")
+                        break
         except Exception as e:
             debug(f"    Error listando reports: {e}")
 
@@ -181,7 +203,11 @@ async def verificar_artefactos_existentes(client, notebook_id: str) -> dict:
             audios = await client.artifacts.list_audio(notebook_id)
             debug(f"    Audios encontrados: {len(audios) if audios else 0}")
             if audios:
-                existentes['audio'] = audios[0]
+                for audio in audios:
+                    if artefacto_tiene_idioma(audio, idioma):
+                        existentes['audio'] = audio
+                        debug(f"    Audio en idioma {idioma} encontrado")
+                        break
         except Exception as e:
             debug(f"    Error listando audios: {e}")
 
@@ -190,6 +216,7 @@ async def verificar_artefactos_existentes(client, notebook_id: str) -> dict:
             slides = await client.artifacts.list_slide_decks(notebook_id)
             debug(f"    Slides encontrados: {len(slides) if slides else 0}")
             if slides:
+                # Slides no tienen idioma, tomar el primero
                 existentes['slides'] = slides[0]
         except Exception as e:
             debug(f"    Error listando slides: {e}")
@@ -199,6 +226,7 @@ async def verificar_artefactos_existentes(client, notebook_id: str) -> dict:
             infographics = await client.artifacts.list_infographics(notebook_id)
             debug(f"    Infographics encontrados: {len(infographics) if infographics else 0}")
             if infographics:
+                # Infographics no tienen idioma, tomar el primero
                 existentes['infographic'] = infographics[0]
         except Exception as e:
             debug(f"    Error listando infographics: {e}")
@@ -354,10 +382,10 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
             print(f"  ID: {notebook.id}")
             print(f"  URL: https://notebooklm.google.com/notebook/{notebook.id}")
 
-            # Verificar artefactos existentes
+            # Verificar artefactos existentes (considerando idioma)
             debug("PASO 4.1: Verificar artefactos existentes")
-            print("\nVerificando artefactos existentes...")
-            existentes = await verificar_artefactos_existentes(client, notebook.id)
+            print(f"\nVerificando artefactos existentes (idioma: {idioma})...")
+            existentes = await verificar_artefactos_existentes(client, notebook.id, idioma)
 
             # Mostrar estado de cada artefacto
             print("\nEstado de artefactos:")
@@ -462,6 +490,10 @@ Ejemplos:
         DEBUG = True
         debug("Modo DEBUG activado")
         debug(f"Argumentos: url={args.url}, mostrar_informe={args.mostrar_informe}, idioma={args.idioma}")
+
+    # Mostrar recordatorio de idioma por defecto
+    if args.idioma == 'es':
+        print("Nota: Usando idioma español por defecto. Usa --idioma para cambiar (ej: --idioma en)")
 
     try:
         asyncio.run(procesar_video(args.url, args.mostrar_informe, args.idioma))
