@@ -8,10 +8,12 @@ Uso:
 Opciones:
     --mostrar-informe    Muestra el contenido del informe por pantalla
     --idioma CODIGO      Idioma para el audio (default: es)
+    --debug              Activa el modo debug con trazas detalladas
 
 Ejemplo:
     python main.py "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
     python main.py "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --mostrar-informe
+    python main.py "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --debug
 
 Requisitos previos:
     1. pip install -r requirements.txt
@@ -24,12 +26,22 @@ import sys
 import re
 import argparse
 import tempfile
+import logging
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
 from pathlib import Path
 
 import yt_dlp
 from notebooklm import NotebookLMClient
+
+# Variable global para modo debug
+DEBUG = False
+
+
+def debug(mensaje: str):
+    """Imprime mensaje de debug si el modo está activo."""
+    if DEBUG:
+        print(f"[DEBUG] {mensaje}")
 
 
 def extraer_video_id(url: str) -> str | None:
@@ -55,28 +67,48 @@ def extraer_video_id(url: str) -> str | None:
 
 def obtener_metadatos_video(url: str) -> dict:
     """Extrae metadatos del vídeo de YouTube usando yt-dlp."""
-    ydl_opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'extract_flat': False,
-    }
+    debug(f"Iniciando extracción de metadatos para: {url}")
+
+    # Configurar yt-dlp según modo debug
+    if DEBUG:
+        ydl_opts = {
+            'quiet': False,
+            'no_warnings': False,
+            'extract_flat': False,
+            'verbose': True,
+        }
+    else:
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': False,
+            # Ignorar errores HTTP no críticos (como 403 en algunas peticiones)
+            'ignoreerrors': False,
+        }
+
+    debug(f"Opciones de yt-dlp: {ydl_opts}")
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        debug("Ejecutando yt-dlp.extract_info()...")
         info = ydl.extract_info(url, download=False)
+        debug(f"Extracción completada. Claves disponibles: {list(info.keys()) if info else 'None'}")
 
         # Extraer fecha de subida (formato YYYYMMDD)
         upload_date = info.get('upload_date', '')
+        debug(f"upload_date raw: {upload_date}")
         if upload_date:
             fecha = datetime.strptime(upload_date, '%Y%m%d').strftime('%Y-%m-%d')
         else:
             fecha = 'fecha-desconocida'
 
-        return {
+        metadatos = {
             'titulo': info.get('title', 'Sin título'),
             'canal': info.get('channel', info.get('uploader', 'Canal desconocido')),
             'fecha': fecha,
             'video_id': info.get('id', ''),
         }
+        debug(f"Metadatos extraídos: {metadatos}")
+        return metadatos
 
 
 def limpiar_texto(texto: str, max_length: int = 50) -> str:
@@ -101,11 +133,16 @@ def generar_nombre_cuaderno(metadatos: dict) -> str:
 
 async def buscar_cuaderno_existente(client: NotebookLMClient, video_id: str):
     """Busca si ya existe un cuaderno para este video_id."""
+    debug(f"Buscando cuaderno con prefijo YouTube_{video_id}")
     notebooks = await client.notebooks.list()
+    debug(f"Cuadernos encontrados: {len(notebooks)}")
     prefijo = f"YouTube_{video_id}"
     for nb in notebooks:
+        debug(f"  Comparando: '{nb.title}' con prefijo '{prefijo}'")
         if nb.title.startswith(prefijo):
+            debug(f"  ✓ Coincidencia encontrada: {nb.id}")
             return nb
+    debug("  No se encontró cuaderno existente")
     return None
 
 
@@ -120,6 +157,7 @@ TIPOS_ARTEFACTOS = {
 
 async def verificar_artefactos_existentes(client, notebook_id: str) -> dict:
     """Verifica qué artefactos ya existen en el cuaderno. Devuelve info de cada uno."""
+    debug(f"Verificando artefactos en notebook: {notebook_id}")
     existentes = {
         'report': None,
         'audio': None,
@@ -129,57 +167,74 @@ async def verificar_artefactos_existentes(client, notebook_id: str) -> dict:
 
     try:
         # Listar cada tipo de artefacto
+        debug("  Buscando reports...")
         try:
             reports = await client.artifacts.list_reports(notebook_id)
+            debug(f"    Reports encontrados: {len(reports) if reports else 0}")
             if reports:
-                existentes['report'] = reports[0]  # Tomar el primero
-        except:
-            pass
+                existentes['report'] = reports[0]
+        except Exception as e:
+            debug(f"    Error listando reports: {e}")
 
+        debug("  Buscando audios...")
         try:
             audios = await client.artifacts.list_audio(notebook_id)
+            debug(f"    Audios encontrados: {len(audios) if audios else 0}")
             if audios:
                 existentes['audio'] = audios[0]
-        except:
-            pass
+        except Exception as e:
+            debug(f"    Error listando audios: {e}")
 
+        debug("  Buscando slides...")
         try:
             slides = await client.artifacts.list_slide_decks(notebook_id)
+            debug(f"    Slides encontrados: {len(slides) if slides else 0}")
             if slides:
                 existentes['slides'] = slides[0]
-        except:
-            pass
+        except Exception as e:
+            debug(f"    Error listando slides: {e}")
 
+        debug("  Buscando infographics...")
         try:
             infographics = await client.artifacts.list_infographics(notebook_id)
+            debug(f"    Infographics encontrados: {len(infographics) if infographics else 0}")
             if infographics:
                 existentes['infographic'] = infographics[0]
-        except:
-            pass
+        except Exception as e:
+            debug(f"    Error listando infographics: {e}")
 
     except Exception as e:
         print(f"  Advertencia al verificar artefactos: {e}")
+        debug(f"  Excepción general: {e}")
 
+    debug(f"Resumen artefactos: report={existentes['report'] is not None}, audio={existentes['audio'] is not None}, slides={existentes['slides'] is not None}, infographic={existentes['infographic'] is not None}")
     return existentes
 
 
 async def generar_artefactos(client, notebook_id: str, faltantes: list[str], idioma: str = 'es') -> int:
     """Genera los artefactos especificados en paralelo. Devuelve cantidad de éxitos."""
+    debug(f"Generando artefactos faltantes: {faltantes} (idioma: {idioma})")
 
     if not faltantes:
+        debug("No hay artefactos faltantes, retornando 0")
         return 0
 
     async def generar_y_reportar(nombre: str, generar_func, **kwargs):
         """Lanza generación y reporta cuando completa."""
+        debug(f"  Iniciando generación de {nombre} con kwargs: {kwargs}")
         print(f"  → Iniciando: {nombre}")
         try:
             status = await generar_func(notebook_id, **kwargs)
+            debug(f"    Status recibido: {status}")
             if status and hasattr(status, 'task_id'):
+                debug(f"    Esperando completado de task_id: {status.task_id}")
                 await client.artifacts.wait_for_completion(notebook_id, status.task_id)
             print(f"  ✓ Completado: {nombre}")
+            debug(f"    {nombre} completado exitosamente")
             return True
         except Exception as e:
             print(f"  ✗ Error en {nombre}: {e}")
+            debug(f"    Excepción en {nombre}: {type(e).__name__}: {e}")
             return False
 
     # Crear tareas con parámetros específicos para cada tipo
@@ -246,43 +301,61 @@ async def mostrar_informe(client, notebook_id: str):
 
 async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: str = 'es'):
     """Procesa un vídeo de YouTube: crea cuaderno y genera artefactos."""
+    debug("="*60)
+    debug("INICIO procesar_video()")
+    debug(f"  URL: {url}")
+    debug(f"  mostrar_informe: {mostrar_informe_flag}")
+    debug(f"  idioma: {idioma}")
+    debug("="*60)
 
     # 1. Validar URL y extraer video_id
+    debug("PASO 1: Validar URL y extraer video_id")
     video_id = extraer_video_id(url)
     if not video_id:
         print(f"Error: URL no válida de YouTube: {url}")
+        debug(f"  Fallo: no se pudo extraer video_id de {url}")
         return False
 
     print(f"Video ID: {video_id}")
     print(f"Idioma para contenido: {idioma}")
+    debug(f"  video_id extraído: {video_id}")
 
     # 2. Obtener metadatos del vídeo
+    debug("PASO 2: Obtener metadatos del vídeo con yt-dlp")
     print("Obteniendo metadatos del vídeo...")
     try:
         metadatos = obtener_metadatos_video(url)
         print(f"  Título: {metadatos['titulo']}")
         print(f"  Canal: {metadatos['canal']}")
         print(f"  Fecha: {metadatos['fecha']}")
+        debug(f"  Metadatos obtenidos correctamente")
     except Exception as e:
         print(f"Error obteniendo metadatos: {e}")
+        debug(f"  Excepción en metadatos: {type(e).__name__}: {e}")
         return False
 
     nombre_cuaderno = generar_nombre_cuaderno(metadatos)
+    debug(f"  Nombre de cuaderno generado: {nombre_cuaderno}")
 
     # 3. Conectar con NotebookLM
+    debug("PASO 3: Conectar con NotebookLM")
     print("Conectando con NotebookLM...")
     async with await NotebookLMClient.from_storage() as client:
+        debug("  Conexión establecida con NotebookLM")
 
         # 4. Verificar si ya existe el cuaderno
+        debug("PASO 4: Verificar si ya existe el cuaderno")
         print(f"Buscando cuaderno existente para: {video_id}")
         notebook = await buscar_cuaderno_existente(client, video_id)
 
         if notebook:
+            debug("  Cuaderno encontrado, procesando como existente")
             print(f"✓ Cuaderno ya existe: {notebook.title}")
             print(f"  ID: {notebook.id}")
             print(f"  URL: https://notebooklm.google.com/notebook/{notebook.id}")
 
             # Verificar artefactos existentes
+            debug("PASO 4.1: Verificar artefactos existentes")
             print("\nVerificando artefactos existentes...")
             existentes = await verificar_artefactos_existentes(client, notebook.id)
 
@@ -317,30 +390,41 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
             return True
 
         # 5. Crear nuevo cuaderno
+        debug("PASO 5: Crear nuevo cuaderno")
         print(f"Creando cuaderno: {nombre_cuaderno}")
         notebook = await client.notebooks.create(nombre_cuaderno)
         print(f"✓ Cuaderno creado (ID: {notebook.id})")
+        debug(f"  Cuaderno creado con ID: {notebook.id}")
 
         # 6. Añadir vídeo como fuente
+        debug("PASO 6: Añadir vídeo como fuente")
         print(f"Añadiendo vídeo como fuente: {url}")
         await client.sources.add_url(notebook.id, url)
         print("✓ Fuente añadida")
+        debug("  Fuente añadida correctamente")
 
         # Esperar un poco para que NotebookLM procese la fuente
+        debug("  Esperando 5 segundos para procesamiento de fuente...")
         print("Esperando a que se procese la fuente...")
         await asyncio.sleep(5)
 
         # 7. Generar todos los artefactos en paralelo
+        debug("PASO 7: Generar todos los artefactos")
         todos_los_tipos = list(TIPOS_ARTEFACTOS.keys())
         exitosos = await generar_artefactos(client, notebook.id, todos_los_tipos, idioma)
         print(f"\n  Artefactos generados: {exitosos}/{len(todos_los_tipos)}")
+        debug(f"  Artefactos exitosos: {exitosos}/{len(todos_los_tipos)}")
 
         # Mostrar informe si se solicita
         if mostrar_informe_flag:
+            debug("PASO 8: Mostrar informe (solicitado)")
             # Esperar un poco para que el informe esté listo
             await asyncio.sleep(2)
             await mostrar_informe(client, notebook.id)
 
+        debug("="*60)
+        debug("FIN procesar_video() - Completado exitosamente")
+        debug("="*60)
         print("\n" + "="*50)
         print("✓ Proceso completado")
         print(f"  Cuaderno: {nombre_cuaderno}")
@@ -350,6 +434,8 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
 
 
 def main():
+    global DEBUG
+
     parser = argparse.ArgumentParser(
         description='Crear cuadernos en NotebookLM desde vídeos de YouTube',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -358,6 +444,7 @@ Ejemplos:
   python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
   python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --mostrar-informe
   python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --idioma en
+  python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --debug
         '''
     )
     parser.add_argument('url', help='URL del vídeo de YouTube')
@@ -365,13 +452,22 @@ Ejemplos:
                         help='Muestra el contenido del informe por pantalla')
     parser.add_argument('--idioma', default='es',
                         help='Código de idioma para audio e informe (default: es)')
+    parser.add_argument('--debug', action='store_true',
+                        help='Activa el modo debug con trazas detalladas')
 
     args = parser.parse_args()
+
+    # Activar modo debug si se solicita
+    if args.debug:
+        DEBUG = True
+        debug("Modo DEBUG activado")
+        debug(f"Argumentos: url={args.url}, mostrar_informe={args.mostrar_informe}, idioma={args.idioma}")
 
     try:
         asyncio.run(procesar_video(args.url, args.mostrar_informe, args.idioma))
     except Exception as e:
         print(f"\nError: {e}")
+        debug(f"Excepción en main: {type(e).__name__}: {e}")
         print("\n¿Has ejecutado 'notebooklm login' para autenticarte?")
         sys.exit(1)
 
