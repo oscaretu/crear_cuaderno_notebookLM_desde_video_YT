@@ -35,7 +35,7 @@ import yt_dlp
 from notebooklm import NotebookLMClient
 
 # Versión del programa
-VERSION = "0.3.2"
+VERSION = "0.3.3"
 
 # Variable global para modo debug
 DEBUG = False
@@ -266,8 +266,12 @@ async def generar_artefactos(client, notebook_id: str, faltantes: list[str], idi
         debug("No hay artefactos faltantes, retornando 0")
         return 0
 
-    async def generar_y_reportar(nombre: str, generar_func, **kwargs):
-        """Lanza generación y reporta cuando completa."""
+    async def generar_y_reportar(nombre: str, tipo: str, generar_func, **kwargs):
+        """Lanza generación y reporta cuando completa.
+
+        Returns:
+            Tuple (éxito: bool, limite_alcanzado: bool)
+        """
         hora_inicio = timestamp()
         debug(f"  Iniciando generación de {nombre} con kwargs: {kwargs}")
         print(f"  [{hora_inicio}] → Iniciando: {nombre}")
@@ -277,11 +281,19 @@ async def generar_artefactos(client, notebook_id: str, faltantes: list[str], idi
 
             # Verificar si la generación falló inmediatamente
             if status and getattr(status, 'status', None) == 'failed':
-                error_msg = getattr(status, 'error', 'Error desconocido')
                 hora_fin = timestamp()
+
+                # Verificar si es un error de límite de cuota
+                if hasattr(status, 'is_rate_limited') and status.is_rate_limited:
+                    print(f"  [{hora_fin}] ⚠ {nombre}: Límite diario alcanzado")
+                    print(f"           Espera al día siguiente o suscríbete a NotebookLM Plus")
+                    debug(f"    {nombre} rechazado por límite de cuota")
+                    return (False, True)  # (no éxito, límite alcanzado)
+
+                error_msg = getattr(status, 'error', 'Error desconocido')
                 print(f"  [{hora_fin}] ✗ Rechazado: {nombre} - {error_msg}")
                 debug(f"    {nombre} rechazado por la API")
-                return False
+                return (False, False)
 
             # Esperar completado si tenemos un task_id válido
             if status and getattr(status, 'task_id', None):
@@ -290,65 +302,56 @@ async def generar_artefactos(client, notebook_id: str, faltantes: list[str], idi
             hora_fin = timestamp()
             print(f"  [{hora_fin}] ✓ Completado: {nombre}")
             debug(f"    {nombre} completado exitosamente")
-            return True
+            return (True, False)
         except Exception as e:
             hora_fin = timestamp()
             print(f"  [{hora_fin}] ✗ Error en {nombre}: {e}")
             debug(f"    Excepción en {nombre}: {type(e).__name__}: {e}")
-            return False
+            return (False, False)
 
-    async def generar_con_retardo(indice: int, nombre: str, generar_func, **kwargs):
-        """Espera el retardo escalonado y luego genera el artefacto."""
-        if indice > 0:
-            retardo = indice * retardo_entre_tareas
-            debug(f"  Tarea {indice} ({nombre}): esperando {retardo}s antes de iniciar")
-            await asyncio.sleep(retardo)
-        return await generar_y_reportar(nombre, generar_func, **kwargs)
+    # Artefactos que comparten cuota (si uno falla por límite, saltar los demás del grupo)
+    CUOTA_COMPARTIDA = {
+        'slides': 'premium',      # slides e infographic comparten cuota premium
+        'infographic': 'premium',
+    }
 
-    # Crear tareas con retardo escalonado para cada tipo
-    tareas = []
-    indice = 0
-    for tipo in faltantes:
-        if tipo == 'report':
-            tareas.append(generar_con_retardo(
-                indice,
-                'Informe',
-                client.artifacts.generate_report,
-                language=idioma
-            ))
-            indice += 1
-        elif tipo == 'audio':
-            tareas.append(generar_con_retardo(
-                indice,
-                'Resumen de Audio',
-                client.artifacts.generate_audio,
-                language=idioma
-            ))
-            indice += 1
-        elif tipo == 'slides':
-            tareas.append(generar_con_retardo(
-                indice,
-                'Presentación (Slides)',
-                client.artifacts.generate_slide_deck,
-                language=idioma
-            ))
-            indice += 1
-        elif tipo == 'infographic':
-            tareas.append(generar_con_retardo(
-                indice,
-                'Infografía',
-                client.artifacts.generate_infographic,
-                language=idioma
-            ))
-            indice += 1
+    # Definir configuración de cada tipo de artefacto
+    CONFIG_ARTEFACTOS = {
+        'report': ('Informe', client.artifacts.generate_report, {'language': idioma}),
+        'audio': ('Resumen de Audio', client.artifacts.generate_audio, {'language': idioma}),
+        'slides': ('Presentación (Slides)', client.artifacts.generate_slide_deck, {'language': idioma}),
+        'infographic': ('Infografía', client.artifacts.generate_infographic, {'language': idioma}),
+    }
 
-    if not tareas:
-        return 0
+    print(f"\nGenerando artefactos (idioma: {idioma}, retardo entre inicios: {retardo_entre_tareas}s)...")
 
-    print(f"\nLanzando generación de artefactos (idioma: {idioma}, retardo entre inicios: {retardo_entre_tareas}s)...")
-    resultados = await asyncio.gather(*tareas, return_exceptions=True)
+    exitosos = 0
+    cuotas_agotadas = set()  # Grupos de cuota que han alcanzado el límite
 
-    exitosos = sum(1 for r in resultados if r is True)
+    for i, tipo in enumerate(faltantes):
+        # Verificar si este tipo comparte cuota con uno ya agotado
+        grupo_cuota = CUOTA_COMPARTIDA.get(tipo)
+        if grupo_cuota and grupo_cuota in cuotas_agotadas:
+            nombre = CONFIG_ARTEFACTOS[tipo][0]
+            print(f"  [--:--:--] ⏭ {nombre}: Omitido (cuota compartida agotada)")
+            debug(f"    Saltando {tipo} porque cuota '{grupo_cuota}' está agotada")
+            continue
+
+        # Aplicar retardo entre artefactos (excepto el primero)
+        if i > 0:
+            debug(f"  Esperando {retardo_entre_tareas}s antes de siguiente artefacto")
+            await asyncio.sleep(retardo_entre_tareas)
+
+        nombre, generar_func, kwargs = CONFIG_ARTEFACTOS[tipo]
+        exito, limite_alcanzado = await generar_y_reportar(nombre, tipo, generar_func, **kwargs)
+
+        if exito:
+            exitosos += 1
+        elif limite_alcanzado and grupo_cuota:
+            # Marcar el grupo de cuota como agotado
+            cuotas_agotadas.add(grupo_cuota)
+            debug(f"    Cuota '{grupo_cuota}' marcada como agotada")
+
     return exitosos
 
 
