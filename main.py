@@ -239,9 +239,20 @@ async def verificar_artefactos_existentes(client, notebook_id: str, idioma: str 
     return existentes
 
 
-async def generar_artefactos(client, notebook_id: str, faltantes: list[str], idioma: str = 'es') -> int:
-    """Genera los artefactos especificados en paralelo. Devuelve cantidad de éxitos."""
-    debug(f"Generando artefactos faltantes: {faltantes} (idioma: {idioma})")
+async def generar_artefactos(client, notebook_id: str, faltantes: list[str], idioma: str = 'es', retardo_entre_tareas: float = 3.0) -> int:
+    """Genera los artefactos especificados en paralelo con retardo escalonado.
+
+    Args:
+        client: Cliente de NotebookLM
+        notebook_id: ID del cuaderno
+        faltantes: Lista de tipos de artefactos a generar
+        idioma: Código de idioma para los artefactos
+        retardo_entre_tareas: Segundos de retardo entre el inicio de cada tarea
+
+    Returns:
+        Cantidad de artefactos generados exitosamente.
+    """
+    debug(f"Generando artefactos faltantes: {faltantes} (idioma: {idioma}, retardo: {retardo_entre_tareas}s)")
 
     if not faltantes:
         debug("No hay artefactos faltantes, retornando 0")
@@ -265,36 +276,53 @@ async def generar_artefactos(client, notebook_id: str, faltantes: list[str], idi
             debug(f"    Excepción en {nombre}: {type(e).__name__}: {e}")
             return False
 
-    # Crear tareas con parámetros específicos para cada tipo
+    async def generar_con_retardo(indice: int, nombre: str, generar_func, **kwargs):
+        """Espera el retardo escalonado y luego genera el artefacto."""
+        if indice > 0:
+            retardo = indice * retardo_entre_tareas
+            debug(f"  Tarea {indice} ({nombre}): esperando {retardo}s antes de iniciar")
+            await asyncio.sleep(retardo)
+        return await generar_y_reportar(nombre, generar_func, **kwargs)
+
+    # Crear tareas con retardo escalonado para cada tipo
     tareas = []
+    indice = 0
     for tipo in faltantes:
         if tipo == 'report':
-            tareas.append(generar_y_reportar(
+            tareas.append(generar_con_retardo(
+                indice,
                 'Informe',
                 client.artifacts.generate_report,
                 language=idioma
             ))
+            indice += 1
         elif tipo == 'audio':
-            tareas.append(generar_y_reportar(
+            tareas.append(generar_con_retardo(
+                indice,
                 'Resumen de Audio',
                 client.artifacts.generate_audio,
                 language=idioma
             ))
+            indice += 1
         elif tipo == 'slides':
-            tareas.append(generar_y_reportar(
+            tareas.append(generar_con_retardo(
+                indice,
                 'Presentación (Slides)',
                 client.artifacts.generate_slide_deck
             ))
+            indice += 1
         elif tipo == 'infographic':
-            tareas.append(generar_y_reportar(
+            tareas.append(generar_con_retardo(
+                indice,
                 'Infografía',
                 client.artifacts.generate_infographic
             ))
+            indice += 1
 
     if not tareas:
         return 0
 
-    print(f"\nLanzando generación de artefactos en paralelo (idioma: {idioma})...")
+    print(f"\nLanzando generación de artefactos (idioma: {idioma}, retardo entre inicios: {retardo_entre_tareas}s)...")
     resultados = await asyncio.gather(*tareas, return_exceptions=True)
 
     exitosos = sum(1 for r in resultados if r is True)
