@@ -2,29 +2,50 @@
 #
 # Crear cuaderno en NotebookLM desde video de YouTube (versión Bash)
 #
-# Genera solo contenidos sin límites de cuota:
+# Por defecto genera solo contenidos sin límites de cuota:
 #   - Report (Briefing Doc)
 #   - Mind Map
 #
 # Uso:
-#   ./crear_cuaderno.sh <URL_YOUTUBE>
+#   ./crear_cuaderno.sh <URL_YOUTUBE> [opciones]
+#
+# Opciones:
+#   --audio        Generar podcast (límite diario)
+#   --video        Generar video (límite diario)
+#   --slides       Generar presentación (límite diario)
+#   --infographic  Generar infografía (límite diario)
+#   --quiz         Generar quiz (límite diario)
+#   --flashcards   Generar flashcards (límite diario)
+#   --todo         Generar todos los artefactos
+#   --solo-limite  Solo artefactos con límite (sin report/mind-map)
 #
 # Requisitos:
 #   - notebooklm CLI instalado y autenticado (notebooklm login)
 #   - yt-dlp instalado
 #   - jq instalado (para parsear JSON)
 #
-# Versión: 1.0.0
+# Versión: 1.1.0
 
 set -e
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 IDIOMA="es"
+
+# Opciones de artefactos (0=no generar, 1=generar)
+OPT_REPORT=1
+OPT_MINDMAP=1
+OPT_AUDIO=0
+OPT_VIDEO=0
+OPT_SLIDES=0
+OPT_INFOGRAPHIC=0
+OPT_QUIZ=0
+OPT_FLASHCARDS=0
 
 # Colores para output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 error() {
@@ -40,8 +61,43 @@ warn() {
     echo -e "${YELLOW}$1${NC}"
 }
 
+nota() {
+    echo -e "${CYAN}$1${NC}"
+}
+
 timestamp() {
     date "+%H:%M:%S"
+}
+
+mostrar_ayuda() {
+    cat << 'EOF'
+Crear cuaderno en NotebookLM desde video de YouTube
+
+Uso:
+  ./crear_cuaderno.sh <URL_YOUTUBE> [opciones]
+
+Opciones:
+  --audio        Generar podcast (⚠ límite diario)
+  --video        Generar video (⚠ límite diario)
+  --slides       Generar presentación (⚠ límite diario)
+  --infographic  Generar infografía (⚠ límite diario)
+  --quiz         Generar quiz (⚠ límite diario)
+  --flashcards   Generar flashcards (⚠ límite diario)
+  --todo         Generar todos los artefactos
+  --solo-limite  Solo artefactos con límite (omite report/mind-map)
+  -h, --help     Mostrar esta ayuda
+
+Por defecto genera (sin límites):
+  - Report (Briefing Doc)
+  - Mind Map
+
+Ejemplos:
+  ./crear_cuaderno.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+  ./crear_cuaderno.sh "https://www.youtube.com/watch?v=VIDEO_ID" --audio
+  ./crear_cuaderno.sh "https://www.youtube.com/watch?v=VIDEO_ID" --todo
+  ./crear_cuaderno.sh "https://www.youtube.com/watch?v=VIDEO_ID" --slides --infographic
+EOF
+    exit 0
 }
 
 # Verificar dependencias
@@ -120,22 +176,168 @@ existe_artefacto() {
         '.artifacts[] | select(.type == $tipo)' >/dev/null 2>&1
 }
 
-# Main
-main() {
-    echo "NotebookLM YouTube Importer (Bash) v$VERSION"
-    echo "Idioma forzado: $IDIOMA"
-    echo ""
+# Generar un artefacto
+generar_artefacto() {
+    local tipo="$1"
+    local nombre="$2"
+    local con_limite="$3"
 
-    # Verificar argumentos
-    if [ $# -lt 1 ]; then
-        echo "Uso: $0 <URL_YOUTUBE>"
-        echo ""
-        echo "Ejemplo:"
-        echo "  $0 \"https://www.youtube.com/watch?v=dQw4w9WgXcQ\""
-        exit 1
+    echo ""
+    if [ "$con_limite" = "1" ]; then
+        echo "[$(timestamp)] Generando: $nombre (⚠ límite diario)"
+    else
+        echo "[$(timestamp)] Generando: $nombre"
     fi
 
-    local url="$1"
+    local resultado=0
+    case "$tipo" in
+        report)
+            notebooklm generate report --language "$IDIOMA" 2>/dev/null && resultado=1
+            ;;
+        mind-map)
+            notebooklm generate mind-map 2>/dev/null && resultado=1
+            ;;
+        audio)
+            notebooklm generate audio --language "$IDIOMA" 2>/dev/null && resultado=1
+            ;;
+        video)
+            notebooklm generate video --language "$IDIOMA" 2>/dev/null && resultado=1
+            ;;
+        slides)
+            notebooklm generate slide-deck --language "$IDIOMA" 2>/dev/null && resultado=1
+            ;;
+        infographic)
+            notebooklm generate infographic --language "$IDIOMA" 2>/dev/null && resultado=1
+            ;;
+        quiz)
+            notebooklm generate quiz 2>/dev/null && resultado=1
+            ;;
+        flashcards)
+            notebooklm generate flashcards 2>/dev/null && resultado=1
+            ;;
+    esac
+
+    if [ "$resultado" = "1" ]; then
+        info "[$(timestamp)] ✓ $nombre generado"
+        return 0
+    else
+        if [ "$con_limite" = "1" ]; then
+            warn "[$(timestamp)] ✗ $nombre: Error o límite diario alcanzado"
+        else
+            warn "[$(timestamp)] ✗ Error generando $nombre"
+        fi
+        return 1
+    fi
+}
+
+# Parsear argumentos
+parse_args() {
+    local url=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                mostrar_ayuda
+                ;;
+            --audio)
+                OPT_AUDIO=1
+                shift
+                ;;
+            --video)
+                OPT_VIDEO=1
+                shift
+                ;;
+            --slides)
+                OPT_SLIDES=1
+                shift
+                ;;
+            --infographic)
+                OPT_INFOGRAPHIC=1
+                shift
+                ;;
+            --quiz)
+                OPT_QUIZ=1
+                shift
+                ;;
+            --flashcards)
+                OPT_FLASHCARDS=1
+                shift
+                ;;
+            --todo)
+                OPT_AUDIO=1
+                OPT_VIDEO=1
+                OPT_SLIDES=1
+                OPT_INFOGRAPHIC=1
+                OPT_QUIZ=1
+                OPT_FLASHCARDS=1
+                shift
+                ;;
+            --solo-limite)
+                OPT_REPORT=0
+                OPT_MINDMAP=0
+                OPT_AUDIO=1
+                OPT_VIDEO=1
+                OPT_SLIDES=1
+                OPT_INFOGRAPHIC=1
+                OPT_QUIZ=1
+                OPT_FLASHCARDS=1
+                shift
+                ;;
+            -*)
+                error "Opción desconocida: $1"
+                ;;
+            *)
+                if [ -z "$url" ]; then
+                    url="$1"
+                else
+                    error "Demasiados argumentos"
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    echo "$url"
+}
+
+# Main
+main() {
+    # Parsear argumentos
+    local url
+    url=$(parse_args "$@")
+
+    echo "NotebookLM YouTube Importer (Bash) v$VERSION"
+    echo "Idioma forzado: $IDIOMA"
+
+    # Mostrar qué se va a generar
+    local artefactos_sin_limite=""
+    local artefactos_con_limite=""
+
+    [ "$OPT_REPORT" = "1" ] && artefactos_sin_limite+="report "
+    [ "$OPT_MINDMAP" = "1" ] && artefactos_sin_limite+="mind-map "
+    [ "$OPT_AUDIO" = "1" ] && artefactos_con_limite+="audio "
+    [ "$OPT_VIDEO" = "1" ] && artefactos_con_limite+="video "
+    [ "$OPT_SLIDES" = "1" ] && artefactos_con_limite+="slides "
+    [ "$OPT_INFOGRAPHIC" = "1" ] && artefactos_con_limite+="infographic "
+    [ "$OPT_QUIZ" = "1" ] && artefactos_con_limite+="quiz "
+    [ "$OPT_FLASHCARDS" = "1" ] && artefactos_con_limite+="flashcards "
+
+    if [ -n "$artefactos_sin_limite" ]; then
+        echo "Artefactos sin límite: $artefactos_sin_limite"
+    fi
+    if [ -n "$artefactos_con_limite" ]; then
+        warn "Artefactos con límite: $artefactos_con_limite"
+        nota "  (pueden fallar si se alcanzó el límite diario)"
+    fi
+    echo ""
+
+    # Verificar URL
+    if [ -z "$url" ]; then
+        echo "Uso: $0 <URL_YOUTUBE> [opciones]"
+        echo ""
+        echo "Usa --help para ver todas las opciones"
+        exit 1
+    fi
 
     # Verificar dependencias
     check_dependencies
@@ -184,36 +386,10 @@ main() {
     local notebook_id
     notebook_id=$(buscar_cuaderno_existente "YT-${video_id}")
 
+    local es_nuevo=0
     if [ -n "$notebook_id" ]; then
         info "Cuaderno encontrado: $notebook_id"
         echo "URL: https://notebooklm.google.com/notebook/$notebook_id"
-
-        # Verificar artefactos existentes
-        echo ""
-        echo "Verificando artefactos existentes..."
-        local artifacts_json
-        artifacts_json=$(listar_artefactos "$notebook_id")
-
-        # Mostrar estado
-        echo ""
-        echo "Estado de artefactos (sin límites de cuota):"
-
-        local faltantes=()
-
-        if existe_artefacto "$artifacts_json" "Briefing Doc"; then
-            info "  ✓ Report (Briefing Doc): disponible"
-        else
-            warn "  ✗ Report (Briefing Doc): no disponible"
-            faltantes+=("report")
-        fi
-
-        if existe_artefacto "$artifacts_json" "Mind Map"; then
-            info "  ✓ Mind Map: disponible"
-        else
-            warn "  ✗ Mind Map: no disponible"
-            faltantes+=("mind-map")
-        fi
-
     else
         # Crear nuevo cuaderno
         echo "No existe, creando cuaderno..."
@@ -233,10 +409,55 @@ main() {
         notebooklm source add "$url" || warn "Aviso al añadir fuente (puede estar procesándose)"
 
         info "Fuente añadida"
-
-        # Todos los artefactos faltan
-        faltantes=("report" "mind-map")
+        es_nuevo=1
     fi
+
+    # Verificar artefactos existentes
+    echo ""
+    echo "Verificando artefactos existentes..."
+    local artifacts_json
+    artifacts_json=$(listar_artefactos "$notebook_id")
+
+    # Definir artefactos a verificar/generar
+    # Formato: tipo|nombre_mostrar|tipo_api|con_limite|opcion
+    local ARTEFACTOS=(
+        "report|Report (Briefing Doc)|Briefing Doc|0|OPT_REPORT"
+        "mind-map|Mind Map|Mind Map|0|OPT_MINDMAP"
+        "audio|Audio (Podcast)|Audio Overview|1|OPT_AUDIO"
+        "video|Video|Video Overview|1|OPT_VIDEO"
+        "slides|Presentación (Slides)|Slide Deck|1|OPT_SLIDES"
+        "infographic|Infografía|Infographic|1|OPT_INFOGRAPHIC"
+        "quiz|Quiz|Quiz|1|OPT_QUIZ"
+        "flashcards|Flashcards|Flashcards|1|OPT_FLASHCARDS"
+    )
+
+    local faltantes=()
+    local faltantes_limite=()
+
+    echo ""
+    echo "Estado de artefactos:"
+
+    for item in "${ARTEFACTOS[@]}"; do
+        IFS='|' read -r tipo nombre tipo_api con_limite opcion <<< "$item"
+
+        # Verificar si esta opción está activa
+        local activo=0
+        eval "activo=\$$opcion"
+
+        if [ "$activo" = "1" ]; then
+            if existe_artefacto "$artifacts_json" "$tipo_api"; then
+                info "  ✓ $nombre: disponible"
+            else
+                if [ "$con_limite" = "1" ]; then
+                    warn "  ✗ $nombre: no disponible (⚠ límite)"
+                    faltantes+=("$tipo|$nombre|$con_limite")
+                else
+                    warn "  ✗ $nombre: no disponible"
+                    faltantes+=("$tipo|$nombre|$con_limite")
+                fi
+            fi
+        fi
+    done
 
     # Generar artefactos faltantes
     if [ ${#faltantes[@]} -gt 0 ]; then
@@ -246,30 +467,22 @@ main() {
         # Establecer contexto para generación
         notebooklm use "$notebook_id" >/dev/null 2>&1
 
-        for tipo in "${faltantes[@]}"; do
-            echo ""
-            echo "[$(timestamp)] Generando: $tipo"
+        local exitosos=0
+        local total=${#faltantes[@]}
 
-            case "$tipo" in
-                report)
-                    if notebooklm generate report --language "$IDIOMA" 2>/dev/null; then
-                        info "[$(timestamp)] ✓ Report generado"
-                    else
-                        warn "[$(timestamp)] ✗ Error generando report"
-                    fi
-                    ;;
-                mind-map)
-                    if notebooklm generate mind-map 2>/dev/null; then
-                        info "[$(timestamp)] ✓ Mind Map generado"
-                    else
-                        warn "[$(timestamp)] ✗ Error generando mind-map"
-                    fi
-                    ;;
-            esac
+        for item in "${faltantes[@]}"; do
+            IFS='|' read -r tipo nombre con_limite <<< "$item"
+
+            if generar_artefacto "$tipo" "$nombre" "$con_limite"; then
+                ((exitosos++)) || true
+            fi
         done
+
+        echo ""
+        echo "Artefactos generados: $exitosos/$total"
     else
         echo ""
-        info "Todos los artefactos ya están disponibles"
+        info "Todos los artefactos solicitados ya están disponibles"
     fi
 
     # Resumen final
