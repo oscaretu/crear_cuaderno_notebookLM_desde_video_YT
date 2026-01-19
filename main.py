@@ -111,47 +111,41 @@ TIPOS_ARTEFACTOS = {
 
 
 async def verificar_artefactos_existentes(client, notebook_id: str) -> dict:
-    """Verifica qué artefactos ya existen en el cuaderno."""
+    """Verifica qué artefactos ya existen en el cuaderno. Devuelve info de cada uno."""
     existentes = {
-        'report': False,
-        'audio': False,
-        'slides': False,
-        'infographic': False,
+        'report': None,
+        'audio': None,
+        'slides': None,
+        'infographic': None,
     }
 
     try:
-        # Intentar obtener cada tipo de artefacto
-        # Si existe, el método no lanzará excepción o devolverá datos
-
-        # Verificar informe
+        # Listar cada tipo de artefacto
         try:
-            report = await client.artifacts.get_report(notebook_id)
-            if report:
-                existentes['report'] = True
+            reports = await client.artifacts.list_reports(notebook_id)
+            if reports:
+                existentes['report'] = reports[0]  # Tomar el primero
         except:
             pass
 
-        # Verificar audio
         try:
-            audio = await client.artifacts.get_audio(notebook_id)
-            if audio:
-                existentes['audio'] = True
+            audios = await client.artifacts.list_audio(notebook_id)
+            if audios:
+                existentes['audio'] = audios[0]
         except:
             pass
 
-        # Verificar slides
         try:
-            slides = await client.artifacts.get_slide_deck(notebook_id)
+            slides = await client.artifacts.list_slide_decks(notebook_id)
             if slides:
-                existentes['slides'] = True
+                existentes['slides'] = slides[0]
         except:
             pass
 
-        # Verificar infografía
         try:
-            infographic = await client.artifacts.get_infographic(notebook_id)
-            if infographic:
-                existentes['infographic'] = True
+            infographics = await client.artifacts.list_infographics(notebook_id)
+            if infographics:
+                existentes['infographic'] = infographics[0]
         except:
             pass
 
@@ -249,8 +243,11 @@ async def procesar_video(url: str):
             print("\nEstado de artefactos:")
             faltantes = []
             for tipo, nombre in TIPOS_ARTEFACTOS.items():
-                if existentes[tipo]:
-                    print(f"  ✓ {nombre}: disponible")
+                artefacto = existentes[tipo]
+                if artefacto:
+                    # Mostrar info del artefacto si está disponible
+                    titulo = getattr(artefacto, 'title', None) or getattr(artefacto, 'id', 'disponible')
+                    print(f"  ✓ {nombre}: {titulo}")
                 else:
                     print(f"  ✗ {nombre}: no disponible")
                     faltantes.append(tipo)
