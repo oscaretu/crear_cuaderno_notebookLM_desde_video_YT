@@ -34,8 +34,16 @@ from pathlib import Path
 import yt_dlp
 from notebooklm import NotebookLMClient
 
+# Versión del programa
+VERSION = "0.2.0"
+
 # Variable global para modo debug
 DEBUG = False
+
+
+def timestamp() -> str:
+    """Devuelve la hora actual formateada HH:MM:SS."""
+    return datetime.now().strftime("%H:%M:%S")
 
 
 def debug(mensaje: str):
@@ -260,19 +268,22 @@ async def generar_artefactos(client, notebook_id: str, faltantes: list[str], idi
 
     async def generar_y_reportar(nombre: str, generar_func, **kwargs):
         """Lanza generación y reporta cuando completa."""
+        hora_inicio = timestamp()
         debug(f"  Iniciando generación de {nombre} con kwargs: {kwargs}")
-        print(f"  → Iniciando: {nombre}")
+        print(f"  [{hora_inicio}] → Iniciando: {nombre}")
         try:
             status = await generar_func(notebook_id, **kwargs)
             debug(f"    Status recibido: {status}")
             if status and hasattr(status, 'task_id'):
                 debug(f"    Esperando completado de task_id: {status.task_id}")
                 await client.artifacts.wait_for_completion(notebook_id, status.task_id)
-            print(f"  ✓ Completado: {nombre}")
+            hora_fin = timestamp()
+            print(f"  [{hora_fin}] ✓ Completado: {nombre}")
             debug(f"    {nombre} completado exitosamente")
             return True
         except Exception as e:
-            print(f"  ✗ Error en {nombre}: {e}")
+            hora_fin = timestamp()
+            print(f"  [{hora_fin}] ✗ Error en {nombre}: {e}")
             debug(f"    Excepción en {nombre}: {type(e).__name__}: {e}")
             return False
 
@@ -511,7 +522,12 @@ Ejemplos:
     parser.add_argument('--debug', action='store_true',
                         help='Activa el modo debug con trazas detalladas')
 
+    parser.add_argument('--version', '-v', action='version',
+                        version=f'%(prog)s {VERSION}')
+
     args = parser.parse_args()
+
+    print(f"NotebookLM YouTube Importer v{VERSION}")
 
     # Activar modo debug si se solicita
     if args.debug:
