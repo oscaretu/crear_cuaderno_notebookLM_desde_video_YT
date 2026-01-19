@@ -35,7 +35,7 @@ import yt_dlp
 from notebooklm import NotebookLMClient
 
 # Versión del programa
-VERSION = "0.3.1"
+VERSION = "0.3.2"
 
 # Variable global para modo debug
 DEBUG = False
@@ -329,14 +329,16 @@ async def generar_artefactos(client, notebook_id: str, faltantes: list[str], idi
             tareas.append(generar_con_retardo(
                 indice,
                 'Presentación (Slides)',
-                client.artifacts.generate_slide_deck
+                client.artifacts.generate_slide_deck,
+                language=idioma
             ))
             indice += 1
         elif tipo == 'infographic':
             tareas.append(generar_con_retardo(
                 indice,
                 'Infografía',
-                client.artifacts.generate_infographic
+                client.artifacts.generate_infographic,
+                language=idioma
             ))
             indice += 1
 
