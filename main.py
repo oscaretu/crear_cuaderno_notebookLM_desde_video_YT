@@ -122,21 +122,21 @@ def limpiar_texto(texto: str, max_length: int = 50) -> str:
 
 
 def generar_nombre_cuaderno(metadatos: dict) -> str:
-    """Genera nombre del cuaderno con formato: YouTube_ID - Título - Fecha - Canal."""
+    """Genera nombre del cuaderno con formato: YT-ID - Título - Fecha - Canal."""
     titulo = limpiar_texto(metadatos['titulo'], 60)
     canal = limpiar_texto(metadatos['canal'], 30)
     fecha = metadatos['fecha']
     video_id = metadatos['video_id']
 
-    return f"YouTube_{video_id} - {titulo} - {fecha} - {canal}"
+    return f"YT-{video_id} - {titulo} - {fecha} - {canal}"
 
 
 async def buscar_cuaderno_existente(client: NotebookLMClient, video_id: str):
     """Busca si ya existe un cuaderno para este video_id."""
-    debug(f"Buscando cuaderno con prefijo YouTube_{video_id}")
+    debug(f"Buscando cuaderno con prefijo YT-{video_id}")
     notebooks = await client.notebooks.list()
     debug(f"Cuadernos encontrados: {len(notebooks)}")
-    prefijo = f"YouTube_{video_id}"
+    prefijo = f"YT-{video_id}"
     for nb in notebooks:
         debug(f"  Comparando: '{nb.title}' con prefijo '{prefijo}'")
         if nb.title.startswith(prefijo):
