@@ -35,7 +35,7 @@ import yt_dlp
 from notebooklm import NotebookLMClient
 
 # Versión del programa
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 # Variable global para modo debug
 DEBUG = False
@@ -460,7 +460,9 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
         debug("PASO 5: Crear nuevo cuaderno")
         print(f"Creando cuaderno: {nombre_cuaderno}")
         notebook = await client.notebooks.create(nombre_cuaderno)
+        notebook_url = f"https://notebooklm.google.com/notebook/{notebook.id}"
         print(f"✓ Cuaderno creado (ID: {notebook.id})")
+        print(f"  URL: {notebook_url}")
         debug(f"  Cuaderno creado con ID: {notebook.id}")
 
         # 6. Añadir vídeo como fuente
