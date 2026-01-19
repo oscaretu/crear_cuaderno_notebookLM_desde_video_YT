@@ -35,7 +35,7 @@ import yt_dlp
 from notebooklm import NotebookLMClient
 
 # Versión del programa
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 
 # Variable global para modo debug
 DEBUG = False
@@ -366,13 +366,24 @@ async def mostrar_informe(client, notebook_id: str):
         print(f"\n  ✗ Error al obtener el informe: {e}")
 
 
-async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: str = 'es'):
-    """Procesa un vídeo de YouTube: crea cuaderno y genera artefactos."""
+async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: str = 'es',
+                         timeout_fuente: float = 60.0, retardo: float = 3.0):
+    """Procesa un vídeo de YouTube: crea cuaderno y genera artefactos.
+
+    Args:
+        url: URL del vídeo de YouTube
+        mostrar_informe_flag: Si True, muestra el contenido del informe
+        idioma: Código de idioma para los artefactos
+        timeout_fuente: Segundos máx. para esperar procesamiento de fuente
+        retardo: Segundos de retardo entre inicio de cada generación
+    """
     debug("="*60)
     debug("INICIO procesar_video()")
     debug(f"  URL: {url}")
     debug(f"  mostrar_informe: {mostrar_informe_flag}")
     debug(f"  idioma: {idioma}")
+    debug(f"  timeout_fuente: {timeout_fuente}s")
+    debug(f"  retardo: {retardo}s")
     debug("="*60)
 
     # 1. Validar URL y extraer video_id
@@ -442,7 +453,7 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
             # Generar los faltantes
             if faltantes:
                 print(f"\nGenerando {len(faltantes)} artefacto(s) faltante(s)...")
-                exitosos = await generar_artefactos(client, notebook.id, faltantes, idioma)
+                exitosos = await generar_artefactos(client, notebook.id, faltantes, idioma, retardo)
                 print(f"\n  Artefactos generados: {exitosos}/{len(faltantes)}")
             else:
                 print("\n✓ Todos los artefactos ya están disponibles")
@@ -465,22 +476,22 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
         print(f"  URL: {notebook_url}")
         debug(f"  Cuaderno creado con ID: {notebook.id}")
 
-        # 6. Añadir vídeo como fuente
+        # 6. Añadir vídeo como fuente y esperar a que esté lista
         debug("PASO 6: Añadir vídeo como fuente")
         print(f"Añadiendo vídeo como fuente: {url}")
-        await client.sources.add_url(notebook.id, url)
-        print("✓ Fuente añadida")
-        debug("  Fuente añadida correctamente")
+        print(f"Esperando a que se procese (máx. {timeout_fuente}s)...")
+        try:
+            await client.sources.add_url(notebook.id, url, wait=True, wait_timeout=timeout_fuente)
+            print("✓ Fuente añadida y procesada")
+            debug("  Fuente añadida y lista")
+        except Exception as e:
+            print(f"✓ Fuente añadida (aviso al esperar: {e})")
+            debug(f"  Fuente añadida pero error en espera: {e}")
 
-        # Esperar un poco para que NotebookLM procese la fuente
-        debug("  Esperando 5 segundos para procesamiento de fuente...")
-        print("Esperando a que se procese la fuente...")
-        await asyncio.sleep(5)
-
-        # 7. Generar todos los artefactos en paralelo
+        # 7. Generar todos los artefactos
         debug("PASO 7: Generar todos los artefactos")
         todos_los_tipos = list(TIPOS_ARTEFACTOS.keys())
-        exitosos = await generar_artefactos(client, notebook.id, todos_los_tipos, idioma)
+        exitosos = await generar_artefactos(client, notebook.id, todos_los_tipos, idioma, retardo)
         print(f"\n  Artefactos generados: {exitosos}/{len(todos_los_tipos)}")
         debug(f"  Artefactos exitosos: {exitosos}/{len(todos_los_tipos)}")
 
@@ -513,6 +524,8 @@ Ejemplos:
   python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
   python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --mostrar-informe
   python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --idioma en
+  python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --timeout-fuente 90
+  python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --retardo 5
   python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --debug
         '''
     )
@@ -521,6 +534,10 @@ Ejemplos:
                         help='Muestra el contenido del informe por pantalla')
     parser.add_argument('--idioma', default='es',
                         help='Código de idioma para audio e informe (default: es)')
+    parser.add_argument('--timeout-fuente', type=float, default=60.0,
+                        help='Segundos máx. para esperar procesamiento de fuente (default: 60)')
+    parser.add_argument('--retardo', type=float, default=3.0,
+                        help='Segundos de retardo entre inicio de cada generación (default: 3)')
     parser.add_argument('--debug', action='store_true',
                         help='Activa el modo debug con trazas detalladas')
 
@@ -535,14 +552,21 @@ Ejemplos:
     if args.debug:
         DEBUG = True
         debug("Modo DEBUG activado")
-        debug(f"Argumentos: url={args.url}, mostrar_informe={args.mostrar_informe}, idioma={args.idioma}")
+        debug(f"Argumentos: url={args.url}, mostrar_informe={args.mostrar_informe}, "
+              f"idioma={args.idioma}, timeout_fuente={args.timeout_fuente}, retardo={args.retardo}")
 
     # Mostrar recordatorio de idioma por defecto
     if args.idioma == 'es':
         print("Nota: Usando idioma español por defecto. Usa --idioma para cambiar (ej: --idioma en)")
 
     try:
-        asyncio.run(procesar_video(args.url, args.mostrar_informe, args.idioma))
+        asyncio.run(procesar_video(
+            args.url,
+            args.mostrar_informe,
+            args.idioma,
+            args.timeout_fuente,
+            args.retardo
+        ))
     except Exception as e:
         print(f"\nError: {e}")
         debug(f"Excepción en main: {type(e).__name__}: {e}")
