@@ -3,10 +3,15 @@
 Aplicación para crear cuadernos en NotebookLM desde vídeos de YouTube.
 
 Uso:
-    python main.py <URL_YOUTUBE>
+    python main.py <URL_YOUTUBE> [opciones]
+
+Opciones:
+    --mostrar-informe    Muestra el contenido del informe por pantalla
+    --idioma CODIGO      Idioma para el audio (default: es)
 
 Ejemplo:
     python main.py "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    python main.py "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --mostrar-informe
 
 Requisitos previos:
     1. pip install -r requirements.txt
@@ -17,8 +22,11 @@ Requisitos previos:
 import asyncio
 import sys
 import re
+import argparse
+import tempfile
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
+from pathlib import Path
 
 import yt_dlp
 from notebooklm import NotebookLMClient
@@ -155,17 +163,17 @@ async def verificar_artefactos_existentes(client, notebook_id: str) -> dict:
     return existentes
 
 
-async def generar_artefactos(client, notebook_id: str, faltantes: list[str]) -> int:
+async def generar_artefactos(client, notebook_id: str, faltantes: list[str], idioma: str = 'es') -> int:
     """Genera los artefactos especificados en paralelo. Devuelve cantidad de éxitos."""
 
     if not faltantes:
         return 0
 
-    async def generar_y_reportar(nombre: str, generar_func):
+    async def generar_y_reportar(nombre: str, generar_func, **kwargs):
         """Lanza generación y reporta cuando completa."""
         print(f"  → Iniciando: {nombre}")
         try:
-            status = await generar_func(notebook_id)
+            status = await generar_func(notebook_id, **kwargs)
             if status and hasattr(status, 'task_id'):
                 await client.artifacts.wait_for_completion(notebook_id, status.task_id)
             print(f"  ✓ Completado: {nombre}")
@@ -174,32 +182,69 @@ async def generar_artefactos(client, notebook_id: str, faltantes: list[str]) -> 
             print(f"  ✗ Error en {nombre}: {e}")
             return False
 
-    # Mapeo de tipo a función generadora
-    generadores = {
-        'report': ('Informe', client.artifacts.generate_report),
-        'audio': ('Resumen de Audio', client.artifacts.generate_audio),
-        'slides': ('Presentación (Slides)', client.artifacts.generate_slide_deck),
-        'infographic': ('Infografía', client.artifacts.generate_infographic),
-    }
-
-    # Crear tareas solo para los faltantes
-    tareas = [
-        generar_y_reportar(generadores[tipo][0], generadores[tipo][1])
-        for tipo in faltantes
-        if tipo in generadores
-    ]
+    # Crear tareas con parámetros específicos para cada tipo
+    tareas = []
+    for tipo in faltantes:
+        if tipo == 'report':
+            tareas.append(generar_y_reportar(
+                'Informe',
+                client.artifacts.generate_report,
+                language=idioma
+            ))
+        elif tipo == 'audio':
+            tareas.append(generar_y_reportar(
+                'Resumen de Audio',
+                client.artifacts.generate_audio,
+                language=idioma
+            ))
+        elif tipo == 'slides':
+            tareas.append(generar_y_reportar(
+                'Presentación (Slides)',
+                client.artifacts.generate_slide_deck
+            ))
+        elif tipo == 'infographic':
+            tareas.append(generar_y_reportar(
+                'Infografía',
+                client.artifacts.generate_infographic
+            ))
 
     if not tareas:
         return 0
 
-    print("\nLanzando generación de artefactos en paralelo...")
+    print(f"\nLanzando generación de artefactos en paralelo (idioma: {idioma})...")
     resultados = await asyncio.gather(*tareas, return_exceptions=True)
 
     exitosos = sum(1 for r in resultados if r is True)
     return exitosos
 
 
-async def procesar_video(url: str):
+async def mostrar_informe(client, notebook_id: str):
+    """Descarga y muestra el contenido del informe."""
+    try:
+        # Crear archivo temporal para el informe
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+            temp_path = f.name
+
+        # Descargar el informe
+        await client.artifacts.download_report(notebook_id, temp_path)
+
+        # Leer y mostrar el contenido
+        contenido = Path(temp_path).read_text(encoding='utf-8')
+
+        print("\n" + "="*60)
+        print("CONTENIDO DEL INFORME")
+        print("="*60)
+        print(contenido)
+        print("="*60)
+
+        # Limpiar archivo temporal
+        Path(temp_path).unlink(missing_ok=True)
+
+    except Exception as e:
+        print(f"\n  ✗ Error al obtener el informe: {e}")
+
+
+async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: str = 'es'):
     """Procesa un vídeo de YouTube: crea cuaderno y genera artefactos."""
 
     # 1. Validar URL y extraer video_id
@@ -209,6 +254,7 @@ async def procesar_video(url: str):
         return False
 
     print(f"Video ID: {video_id}")
+    print(f"Idioma para contenido: {idioma}")
 
     # 2. Obtener metadatos del vídeo
     print("Obteniendo metadatos del vídeo...")
@@ -234,6 +280,7 @@ async def procesar_video(url: str):
         if notebook:
             print(f"✓ Cuaderno ya existe: {notebook.title}")
             print(f"  ID: {notebook.id}")
+            print(f"  URL: https://notebooklm.google.com/notebook/{notebook.id}")
 
             # Verificar artefactos existentes
             print("\nVerificando artefactos existentes...")
@@ -255,10 +302,14 @@ async def procesar_video(url: str):
             # Generar los faltantes
             if faltantes:
                 print(f"\nGenerando {len(faltantes)} artefacto(s) faltante(s)...")
-                exitosos = await generar_artefactos(client, notebook.id, faltantes)
+                exitosos = await generar_artefactos(client, notebook.id, faltantes, idioma)
                 print(f"\n  Artefactos generados: {exitosos}/{len(faltantes)}")
             else:
                 print("\n✓ Todos los artefactos ya están disponibles")
+
+            # Mostrar informe si se solicita
+            if mostrar_informe_flag and existentes['report']:
+                await mostrar_informe(client, notebook.id)
 
             print("\n" + "="*50)
             print(f"  Visita NotebookLM para ver los resultados:")
@@ -281,29 +332,44 @@ async def procesar_video(url: str):
 
         # 7. Generar todos los artefactos en paralelo
         todos_los_tipos = list(TIPOS_ARTEFACTOS.keys())
-        exitosos = await generar_artefactos(client, notebook.id, todos_los_tipos)
+        exitosos = await generar_artefactos(client, notebook.id, todos_los_tipos, idioma)
         print(f"\n  Artefactos generados: {exitosos}/{len(todos_los_tipos)}")
+
+        # Mostrar informe si se solicita
+        if mostrar_informe_flag:
+            # Esperar un poco para que el informe esté listo
+            await asyncio.sleep(2)
+            await mostrar_informe(client, notebook.id)
 
         print("\n" + "="*50)
         print("✓ Proceso completado")
         print(f"  Cuaderno: {nombre_cuaderno}")
-        print(f"  Visita NotebookLM para ver los resultados:")
-        print(f"  https://notebooklm.google.com/notebook/{notebook.id}")
+        print(f"  URL: https://notebooklm.google.com/notebook/{notebook.id}")
 
         return True
 
 
 def main():
-    if len(sys.argv) < 2:
-        print(__doc__)
-        print("\nError: Debes proporcionar una URL de YouTube")
-        print("Ejemplo: python main.py 'https://www.youtube.com/watch?v=VIDEO_ID'")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description='Crear cuadernos en NotebookLM desde vídeos de YouTube',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''
+Ejemplos:
+  python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
+  python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --mostrar-informe
+  python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --idioma en
+        '''
+    )
+    parser.add_argument('url', help='URL del vídeo de YouTube')
+    parser.add_argument('--mostrar-informe', action='store_true',
+                        help='Muestra el contenido del informe por pantalla')
+    parser.add_argument('--idioma', default='es',
+                        help='Código de idioma para audio e informe (default: es)')
 
-    url = sys.argv[1]
+    args = parser.parse_args()
 
     try:
-        asyncio.run(procesar_video(url))
+        asyncio.run(procesar_video(args.url, args.mostrar_informe, args.idioma))
     except Exception as e:
         print(f"\nError: {e}")
         print("\n¿Has ejecutado 'notebooklm login' para autenticarte?")
