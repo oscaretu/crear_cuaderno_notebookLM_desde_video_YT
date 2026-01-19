@@ -203,6 +203,7 @@ python listar_cuadernos.py
 |-----------|-------------|---------|
 | `--ordenar` | Campo de ordenación: `nombre`, `creacion`, `modificacion` | `nombre` |
 | `--desc` | Orden descendente | ascendente |
+| `--idioma` | Filtrar por idioma de artefactos (ej: `es`, `en`) | ninguno |
 
 ### Ejemplos de uso
 
@@ -298,6 +299,48 @@ Total: 3 cuaderno(s)
 
 ```bash
 python listar_cuadernos.py --ordenar modificacion --desc
+```
+
+#### Filtrar por idioma de artefactos
+
+```bash
+python listar_cuadernos.py --idioma es
+```
+
+**Salida:**
+```
+Conectando con NotebookLM...
+Obteniendo lista de cuadernos...
+Filtrando por idioma: es
+Verificando idiomas de artefactos (esto puede tardar)...
+
+================================================================================
+CUADERNOS CON IDIOMA 'ES' (2 de 3 total)
+Ordenados por: nombre (ascendente)
+================================================================================
+
+  1. Apuntes de Python
+     ID: 11111111-1111-1111-1111-111111111111
+     URL: https://notebooklm.google.com/notebook/11111111-1111-1111-1111-111111111111
+     Creado: 2024-01-10 14:30
+     Modificado: 2024-01-15 09:45
+     Idiomas: es
+
+  2. YT-dQw4w9WgXcQ - Rick Astley - Never Gonna Give You Up - 2009-10-25 - Rick Astley
+     ID: 33333333-3333-3333-3333-333333333333
+     URL: https://notebooklm.google.com/notebook/33333333-3333-3333-3333-333333333333
+     Creado: 2024-01-19 08:00
+     Modificado: 2024-01-19 08:15
+     Idiomas: es
+
+================================================================================
+Total: 2 cuaderno(s) con idioma 'es'
+```
+
+#### Combinar filtro de idioma con ordenación
+
+```bash
+python listar_cuadernos.py --idioma en --ordenar modificacion --desc
 ```
 
 ---
