@@ -11,6 +11,13 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
+Para el script Bash también necesitas:
+```bash
+# jq para parsear JSON
+sudo apt install jq  # Linux/WSL
+brew install jq      # macOS
+```
+
 ### Autenticación
 
 Antes de usar cualquier herramienta, debes autenticarte con tu cuenta de Google:
@@ -21,12 +28,48 @@ notebooklm login
 
 Se abrirá un navegador. Inicia sesión y espera a ver la página principal de NotebookLM, luego presiona ENTER en la terminal.
 
+**Nota WSL2**: Si usas WSL2, las credenciales se guardan en `~/.notebooklm/`. Si te autenticas desde PowerShell, copia las credenciales:
+```bash
+cp /mnt/c/Users/TU_USUARIO/.notebooklm/storage_state.json ~/.notebooklm/
+```
+
 ---
 
-## main.py - Crear cuadernos desde vídeos de YouTube
+## Herramientas disponibles
+
+| Herramienta | Descripción | Lenguaje |
+|-------------|-------------|----------|
+| `main.py` | Crear cuadernos con todos los artefactos | Python |
+| `crear_cuaderno.sh` | Crear cuadernos (versión simplificada) | Bash |
+| `listar_cuadernos.py` | Listar cuadernos disponibles | Python |
+
+---
+
+## Límites de cuota de NotebookLM
+
+NotebookLM tiene límites diarios para ciertos tipos de artefactos:
+
+| Artefacto | Límite diario |
+|-----------|---------------|
+| Report (Briefing Doc) | Sin límite |
+| Mind Map | Sin límite |
+| Audio (Podcast) | **Con límite** |
+| Video | **Con límite** |
+| Presentación (Slides) | **Con límite** |
+| Infografía | **Con límite** |
+| Quiz | **Con límite** |
+| Flashcards | **Con límite** |
+
+Si alcanzas el límite, espera al día siguiente o suscríbete a NotebookLM Plus.
+
+---
+
+## main.py - Crear cuadernos desde vídeos de YouTube (Python)
+
+Versión: **0.3.3**
 
 Crea automáticamente un cuaderno en NotebookLM a partir de un vídeo de YouTube, generando:
-- Informe (Study Guide)
+- Informe (Briefing Doc)
 - Resumen de audio (podcast)
 - Presentación (slides)
 - Infografía
@@ -42,148 +85,143 @@ python main.py <URL_YOUTUBE>
 | Parámetro | Descripción | Default |
 |-----------|-------------|---------|
 | `url` | URL del vídeo de YouTube (requerido) | - |
-| `--idioma` | Código de idioma para informe y audio | `es` |
+| `--idioma` | Código de idioma para los artefactos | `es` |
 | `--mostrar-informe` | Muestra el contenido del informe por pantalla | No |
+| `--timeout-fuente` | Segundos máx. para esperar procesamiento de fuente | `60` |
+| `--retardo` | Segundos de retardo entre inicio de cada generación | `3` |
 | `--debug` | Activa trazas detalladas de ejecución | No |
+| `--version`, `-v` | Muestra la versión del programa | - |
 
 ### Ejemplos de uso
 
-#### Crear cuaderno con idioma español (por defecto)
+```bash
+# Crear cuaderno con idioma español (por defecto)
+python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
+
+# Crear cuaderno en inglés
+python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --idioma en
+
+# Crear cuaderno y mostrar el informe
+python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --mostrar-informe
+
+# Ajustar tiempos de espera
+python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --timeout-fuente 90 --retardo 5
+
+# Ejecutar con modo debug
+python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --debug
+```
+
+### Manejo de límites de cuota
+
+El script detecta cuando se alcanza el límite diario y muestra un mensaje claro:
+
+```
+[12:30:45] ⚠ Presentación (Slides): Límite diario alcanzado
+           Espera al día siguiente o suscríbete a NotebookLM Plus
+[--:--:--] ⏭ Infografía: Omitido (cuota compartida agotada)
+```
+
+Las presentaciones e infografías comparten cuota; si una falla por límite, la otra se omite automáticamente.
+
+---
+
+## crear_cuaderno.sh - Crear cuadernos (Bash)
+
+Versión: **1.1.0**
+
+Versión simplificada en Bash que usa el CLI `notebooklm` directamente. Por defecto solo genera artefactos sin límites de cuota.
+
+### Uso básico
 
 ```bash
-python main.py "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+./crear_cuaderno.sh <URL_YOUTUBE> [opciones]
 ```
 
-**Salida:**
+### Opciones
+
+| Opción | Descripción | Límite |
+|--------|-------------|--------|
+| (ninguna) | Genera Report y Mind Map | No |
+| `--audio` | Añadir podcast | Sí |
+| `--video` | Añadir video | Sí |
+| `--slides` | Añadir presentación | Sí |
+| `--infographic` | Añadir infografía | Sí |
+| `--quiz` | Añadir quiz | Sí |
+| `--flashcards` | Añadir flashcards | Sí |
+| `--todo` | Generar todos los artefactos | Mixto |
+| `--solo-limite` | Solo artefactos con límite | Sí |
+| `-h`, `--help` | Mostrar ayuda | - |
+
+### Ejemplos de uso
+
+```bash
+# Solo artefactos sin límite (report + mind-map)
+./crear_cuaderno.sh "https://www.youtube.com/watch?v=VIDEO_ID"
+
+# Añadir podcast
+./crear_cuaderno.sh "https://www.youtube.com/watch?v=VIDEO_ID" --audio
+
+# Añadir presentación e infografía
+./crear_cuaderno.sh "https://www.youtube.com/watch?v=VIDEO_ID" --slides --infographic
+
+# Generar todos los artefactos
+./crear_cuaderno.sh "https://www.youtube.com/watch?v=VIDEO_ID" --todo
 ```
-Nota: Usando idioma español por defecto. Usa --idioma para cambiar (ej: --idioma en)
+
+### Salida de ejemplo
+
+```
+NotebookLM YouTube Importer (Bash) v1.1.0
+Idioma forzado: es
+Artefactos sin límite: report mind-map
+Artefactos con límite: audio
+  (pueden fallar si se alcanzó el límite diario)
+
 Video ID: dQw4w9WgXcQ
-Idioma para contenido: es
-Obteniendo metadatos del vídeo...
+Obteniendo metadatos del video...
   Título: Rick Astley - Never Gonna Give You Up
   Canal: Rick Astley
   Fecha: 2009-10-25
-Conectando con NotebookLM...
-Buscando cuaderno existente para: dQw4w9WgXcQ
-Creando cuaderno: YT-dQw4w9WgXcQ - Rick Astley - Never Gonna Give You Up - 2009-10-25 - Rick Astley
-✓ Cuaderno creado (ID: abc123-def456)
-Añadiendo vídeo como fuente: https://www.youtube.com/watch?v=dQw4w9WgXcQ
-✓ Fuente añadida
-Esperando a que se procese la fuente...
 
-Lanzando generación de artefactos en paralelo (idioma: es)...
-  → Iniciando: Informe
-  → Iniciando: Resumen de Audio
-  → Iniciando: Presentación (Slides)
-  → Iniciando: Infografía
-  ✓ Completado: Informe
-  ✓ Completado: Presentación (Slides)
-  ✓ Completado: Infografía
-  ✓ Completado: Resumen de Audio
+Nombre del cuaderno: YT-dQw4w9WgXcQ - Rick Astley - Never Gonna Give... - 2009-10-25 - Rick Astley
 
-  Artefactos generados: 4/4
+Buscando cuaderno existente...
+Cuaderno creado: abc123-def456
+URL: https://notebooklm.google.com/notebook/abc123-def456
 
-==================================================
-✓ Proceso completado
-  Cuaderno: YT-dQw4w9WgXcQ - Rick Astley - Never Gonna Give You Up - 2009-10-25 - Rick Astley
-  URL: https://notebooklm.google.com/notebook/abc123-def456
-```
-
-#### Crear cuaderno en inglés
-
-```bash
-python main.py "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --idioma en
-```
-
-#### Crear cuaderno y mostrar el informe
-
-```bash
-python main.py "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --mostrar-informe
-```
-
-**Salida adicional:**
-```
-============================================================
-CONTENIDO DEL INFORME
-============================================================
-# Guía de Estudio: Rick Astley - Never Gonna Give You Up
-
-## Resumen
-Este vídeo musical presenta la icónica canción de Rick Astley...
-
-## Puntos clave
-- Lanzado en 1987
-- Género: Pop, Dance
-...
-============================================================
-```
-
-#### Ejecutar con modo debug
-
-```bash
-python main.py "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --debug
-```
-
-**Salida adicional:**
-```
-[DEBUG] Modo DEBUG activado
-[DEBUG] Argumentos: url=https://www.youtube.com/watch?v=dQw4w9WgXcQ, mostrar_informe=False, idioma=es
-[DEBUG] ============================================================
-[DEBUG] INICIO procesar_video()
-[DEBUG]   URL: https://www.youtube.com/watch?v=dQw4w9WgXcQ
-[DEBUG]   mostrar_informe: False
-[DEBUG]   idioma: es
-[DEBUG] ============================================================
-[DEBUG] PASO 1: Validar URL y extraer video_id
-[DEBUG]   video_id extraído: dQw4w9WgXcQ
-[DEBUG] PASO 2: Obtener metadatos del vídeo con yt-dlp
-[DEBUG] Iniciando extracción de metadatos para: https://www.youtube.com/watch?v=dQw4w9WgXcQ
-...
-```
-
-#### Ejecutar sobre un cuaderno existente
-
-Si el cuaderno ya existe, muestra el estado de los artefactos y genera los faltantes:
-
-```bash
-python main.py "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-```
-
-**Salida:**
-```
-Nota: Usando idioma español por defecto. Usa --idioma para cambiar (ej: --idioma en)
-Video ID: dQw4w9WgXcQ
-Idioma para contenido: es
-Obteniendo metadatos del vídeo...
-  Título: Rick Astley - Never Gonna Give You Up
-  Canal: Rick Astley
-  Fecha: 2009-10-25
-Conectando con NotebookLM...
-Buscando cuaderno existente para: dQw4w9WgXcQ
-✓ Cuaderno ya existe: YT-dQw4w9WgXcQ - Rick Astley - Never Gonna Give You Up - 2009-10-25 - Rick Astley
-  ID: abc123-def456
-  URL: https://notebooklm.google.com/notebook/abc123-def456
-
-Verificando artefactos existentes (idioma: es)...
+Añadiendo video como fuente...
+Fuente añadida
 
 Estado de artefactos:
-  ✓ Informe: Study Guide
-  ✓ Resumen de Audio: Deep Dive Conversation
-  ✓ Presentación (Slides): Detailed Deck
-  ✗ Infografía: no disponible
+  ✗ Report (Briefing Doc): no disponible
+  ✗ Mind Map: no disponible
+  ✗ Audio (Podcast): no disponible (⚠ límite)
 
-Generando 1 artefacto(s) faltante(s)...
+Generando 3 artefacto(s)...
 
-Lanzando generación de artefactos en paralelo (idioma: es)...
-  → Iniciando: Infografía
-  ✓ Completado: Infografía
+[12:30:45] Generando: Report (Briefing Doc)
+[12:30:52] ✓ Report (Briefing Doc) generado
 
-  Artefactos generados: 1/1
+[12:30:52] Generando: Mind Map
+[12:30:55] ✓ Mind Map generado
+
+[12:30:55] Generando: Audio (Podcast) (⚠ límite diario)
+[12:31:02] ✓ Audio (Podcast) generado
+
+Artefactos generados: 3/3
 
 ==================================================
-  Visita NotebookLM para ver los resultados:
-  https://notebooklm.google.com/notebook/abc123-def456
+Proceso completado
+  Cuaderno: YT-dQw4w9WgXcQ - Rick Astley - Never Gonna Give... - 2009-10-25 - Rick Astley
+  URL: https://notebooklm.google.com/notebook/abc123-def456
+==================================================
 ```
+
+### Requisitos adicionales
+
+- `notebooklm` CLI instalado y autenticado
+- `yt-dlp` para metadatos del video
+- `jq` para parsear JSON
 
 ---
 
@@ -205,142 +243,19 @@ python listar_cuadernos.py
 | `--desc` | Orden descendente | ascendente |
 | `--idioma` | Filtrar por idioma de artefactos (ej: `es`, `en`) | ninguno |
 
+**Nota**: La opción `--idioma` actualmente no funciona correctamente porque la API de NotebookLM no expone el idioma de los artefactos. La opción `--ordenar modificacion` tampoco funciona porque la API solo proporciona fecha de creación.
+
 ### Ejemplos de uso
 
-#### Listar por nombre (A-Z)
-
 ```bash
+# Listar por nombre (A-Z)
 python listar_cuadernos.py
-```
 
-**Salida:**
-```
-Conectando con NotebookLM...
-Obteniendo lista de cuadernos...
-
-================================================================================
-CUADERNOS DISPONIBLES (3 total)
-Ordenados por: nombre (ascendente)
-================================================================================
-
-  1. Apuntes de Python
-     ID: 11111111-1111-1111-1111-111111111111
-     URL: https://notebooklm.google.com/notebook/11111111-1111-1111-1111-111111111111
-     Creado: 2024-01-10 14:30
-     Modificado: 2024-01-15 09:45
-
-  2. Proyecto Machine Learning
-     ID: 22222222-2222-2222-2222-222222222222
-     URL: https://notebooklm.google.com/notebook/22222222-2222-2222-2222-222222222222
-     Creado: 2024-01-05 10:00
-     Modificado: 2024-01-18 16:20
-
-  3. YT-dQw4w9WgXcQ - Rick Astley - Never Gonna Give You Up - 2009-10-25 - Rick Astley
-     ID: 33333333-3333-3333-3333-333333333333
-     URL: https://notebooklm.google.com/notebook/33333333-3333-3333-3333-333333333333
-     Creado: 2024-01-19 08:00
-     Modificado: 2024-01-19 08:15
-
-================================================================================
-Total: 3 cuaderno(s)
-```
-
-#### Listar por nombre (Z-A)
-
-```bash
+# Listar por nombre (Z-A)
 python listar_cuadernos.py --ordenar nombre --desc
-```
 
-#### Listar por fecha de creación (más antiguos primero)
-
-```bash
-python listar_cuadernos.py --ordenar creacion
-```
-
-#### Listar por fecha de creación (más recientes primero)
-
-```bash
+# Listar por fecha de creación (más recientes primero)
 python listar_cuadernos.py --ordenar creacion --desc
-```
-
-**Salida:**
-```
-Conectando con NotebookLM...
-Obteniendo lista de cuadernos...
-
-================================================================================
-CUADERNOS DISPONIBLES (3 total)
-Ordenados por: creacion (descendente)
-================================================================================
-
-  1. YT-dQw4w9WgXcQ - Rick Astley - Never Gonna Give You Up - 2009-10-25 - Rick Astley
-     ID: 33333333-3333-3333-3333-333333333333
-     URL: https://notebooklm.google.com/notebook/33333333-3333-3333-3333-333333333333
-     Creado: 2024-01-19 08:00
-     Modificado: 2024-01-19 08:15
-
-  2. Apuntes de Python
-     ID: 11111111-1111-1111-1111-111111111111
-     URL: https://notebooklm.google.com/notebook/11111111-1111-1111-1111-111111111111
-     Creado: 2024-01-10 14:30
-     Modificado: 2024-01-15 09:45
-
-  3. Proyecto Machine Learning
-     ID: 22222222-2222-2222-2222-222222222222
-     URL: https://notebooklm.google.com/notebook/22222222-2222-2222-2222-222222222222
-     Creado: 2024-01-05 10:00
-     Modificado: 2024-01-18 16:20
-
-================================================================================
-Total: 3 cuaderno(s)
-```
-
-#### Listar por fecha de modificación (más recientes primero)
-
-```bash
-python listar_cuadernos.py --ordenar modificacion --desc
-```
-
-#### Filtrar por idioma de artefactos
-
-```bash
-python listar_cuadernos.py --idioma es
-```
-
-**Salida:**
-```
-Conectando con NotebookLM...
-Obteniendo lista de cuadernos...
-Filtrando por idioma: es
-Verificando idiomas de artefactos (esto puede tardar)...
-
-================================================================================
-CUADERNOS CON IDIOMA 'ES' (2 de 3 total)
-Ordenados por: nombre (ascendente)
-================================================================================
-
-  1. Apuntes de Python
-     ID: 11111111-1111-1111-1111-111111111111
-     URL: https://notebooklm.google.com/notebook/11111111-1111-1111-1111-111111111111
-     Creado: 2024-01-10 14:30
-     Modificado: 2024-01-15 09:45
-     Idiomas: es
-
-  2. YT-dQw4w9WgXcQ - Rick Astley - Never Gonna Give You Up - 2009-10-25 - Rick Astley
-     ID: 33333333-3333-3333-3333-333333333333
-     URL: https://notebooklm.google.com/notebook/33333333-3333-3333-3333-333333333333
-     Creado: 2024-01-19 08:00
-     Modificado: 2024-01-19 08:15
-     Idiomas: es
-
-================================================================================
-Total: 2 cuaderno(s) con idioma 'es'
-```
-
-#### Combinar filtro de idioma con ordenación
-
-```bash
-python listar_cuadernos.py --idioma en --ordenar modificacion --desc
 ```
 
 ---
@@ -349,25 +264,35 @@ python listar_cuadernos.py --idioma en --ordenar modificacion --desc
 
 ```
 crear_cuaderno_notebookLM_desde_video_YT/
-├── main.py              # Crear cuadernos desde YouTube
+├── main.py              # Crear cuadernos desde YouTube (Python)
+├── crear_cuaderno.sh    # Crear cuadernos desde YouTube (Bash)
 ├── listar_cuadernos.py  # Listar cuadernos disponibles
 ├── requirements.txt     # Dependencias Python
 ├── README.md            # Esta documentación
 └── .gitignore           # Archivos ignorados por git
 ```
 
+## Comparativa main.py vs crear_cuaderno.sh
+
+| Aspecto | main.py | crear_cuaderno.sh |
+|---------|---------|-------------------|
+| Artefactos por defecto | report, audio, slides, infographic | report, mind-map |
+| Límites cuota | Sí (con manejo inteligente) | Evitados por defecto |
+| Idioma | Configurable (`--idioma`) | Forzado español |
+| Dependencias | Python + asyncio | Bash + jq |
+| Complejidad | Mayor (más funciones) | Menor (más simple) |
+| Cuota compartida | Detecta y omite | No implementado |
+
 ## Notas
 
-- **Idioma**: El informe y el audio se generan en el idioma especificado (español por defecto). Las presentaciones e infografías no soportan selección de idioma.
+- **Idioma**: El informe y el audio se generan en el idioma especificado (español por defecto).
 
-- **Cuadernos duplicados**: El script detecta cuadernos existentes por el ID del vídeo. Si ejecutas el script dos veces con el mismo vídeo, no creará un cuaderno duplicado.
+- **Cuadernos duplicados**: Los scripts detectan cuadernos existentes por el ID del vídeo (prefijo `YT-{video_id}`). Si ejecutas el script dos veces con el mismo vídeo, no creará un cuaderno duplicado.
 
-- **Artefactos en diferentes idiomas**: Si tienes un informe en inglés y ejecutas el script con `--idioma es`, se generará un nuevo informe en español.
-
-- **Límites gratuitos de NotebookLM**:
+- **Límites de NotebookLM**:
   - 100 cuadernos máximo
   - 50 fuentes por cuaderno
-  - Generación limitada de multimedia por cuaderno
+  - Límites diarios en generación de ciertos artefactos
 
 ## Solución de problemas
 
@@ -378,6 +303,25 @@ Error: Missing required cookies: {'SID'}
 ```
 
 Ejecuta `notebooklm login` y asegúrate de completar el proceso de autenticación.
+
+### Error en WSL2
+
+Si te autenticaste desde PowerShell pero ejecutas desde WSL2:
+```bash
+mkdir -p ~/.notebooklm
+cp /mnt/c/Users/TU_USUARIO/.notebooklm/storage_state.json ~/.notebooklm/
+```
+
+### Límite diario alcanzado
+
+```
+⚠ Presentación (Slides): Límite diario alcanzado
+```
+
+Opciones:
+1. Esperar al día siguiente
+2. Suscribirse a NotebookLM Plus
+3. Usar `crear_cuaderno.sh` sin opciones (solo genera artefactos sin límite)
 
 ### Error 403 Forbidden en yt-dlp
 
