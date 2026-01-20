@@ -35,7 +35,7 @@ import yt_dlp
 from notebooklm import NotebookLMClient
 
 # Versión del programa
-VERSION = "0.3.3"
+VERSION = "0.4.0"
 
 # Variable global para modo debug
 DEBUG = False
@@ -154,12 +154,16 @@ async def buscar_cuaderno_existente(client: NotebookLMClient, video_id: str):
     return None
 
 
-# Mapeo de tipos de artefactos
+# Mapeo de tipos de artefactos (ordenados: sin límite primero, luego por tiempo)
+# report: sin límite, 5-15 min
+# slides: con límite, tiempo medio
+# infographic: con límite, tiempo medio (comparte cuota con slides)
+# audio: con límite, 10-20 min (penúltimo)
 TIPOS_ARTEFACTOS = {
     'report': 'Informe',
-    'audio': 'Resumen de Audio',
     'slides': 'Presentación (Slides)',
     'infographic': 'Infografía',
+    'audio': 'Resumen de Audio',
 }
 
 
@@ -315,12 +319,12 @@ async def generar_artefactos(client, notebook_id: str, faltantes: list[str], idi
         'infographic': 'premium',
     }
 
-    # Definir configuración de cada tipo de artefacto
+    # Definir configuración de cada tipo de artefacto (mismo orden que TIPOS_ARTEFACTOS)
     CONFIG_ARTEFACTOS = {
         'report': ('Informe', client.artifacts.generate_report, {'language': idioma}),
-        'audio': ('Resumen de Audio', client.artifacts.generate_audio, {'language': idioma}),
         'slides': ('Presentación (Slides)', client.artifacts.generate_slide_deck, {'language': idioma}),
         'infographic': ('Infografía', client.artifacts.generate_infographic, {'language': idioma}),
+        'audio': ('Resumen de Audio', client.artifacts.generate_audio, {'language': idioma}),
     }
 
     print(f"\nGenerando artefactos (idioma: {idioma}, retardo entre inicios: {retardo_entre_tareas}s)...")

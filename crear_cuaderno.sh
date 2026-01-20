@@ -28,7 +28,7 @@
 
 set -e
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 IDIOMA="es"
 
 # Opciones de artefactos (0=no generar, 1=generar)
@@ -420,15 +420,22 @@ main() {
 
     # Definir artefactos a verificar/generar
     # Formato: tipo|nombre_mostrar|tipo_api|con_limite|opcion
+    # Orden: sin límite primero, luego por tiempo de generación
+    # report: sin límite, 5-15 min
+    # mind-map: sin límite, instant
+    # slides/infographic: con límite, tiempo medio
+    # quiz/flashcards: con límite, 5-15 min
+    # audio: con límite, 10-20 min (penúltimo)
+    # video: con límite, 15-45 min (último)
     local ARTEFACTOS=(
         "report|Report (Briefing Doc)|Briefing Doc|0|OPT_REPORT"
         "mind-map|Mind Map|Mind Map|0|OPT_MINDMAP"
-        "audio|Audio (Podcast)|Audio Overview|1|OPT_AUDIO"
-        "video|Video|Video Overview|1|OPT_VIDEO"
         "slides|Presentación (Slides)|Slide Deck|1|OPT_SLIDES"
         "infographic|Infografía|Infographic|1|OPT_INFOGRAPHIC"
         "quiz|Quiz|Quiz|1|OPT_QUIZ"
         "flashcards|Flashcards|Flashcards|1|OPT_FLASHCARDS"
+        "audio|Audio (Podcast)|Audio Overview|1|OPT_AUDIO"
+        "video|Video|Video Overview|1|OPT_VIDEO"
     )
 
     local faltantes=()
