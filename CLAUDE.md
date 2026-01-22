@@ -23,27 +23,32 @@ sudo apt install jq  # Linux/WSL
 ## Key Commands
 
 ```bash
-# Create notebook from YouTube video (Python v0.3.3)
+# Create notebook from YouTube video (Python v0.6.0)
 python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
+python main.py "URL" --todo                 # All artifacts
+python main.py "URL" --audio --slides       # Specific artifacts
+python main.py "URL" --mostrar-descripcion  # Show video description
 python main.py "URL" --idioma en --debug
 
-# Create notebook from YouTube video (Bash v1.1.0, Spanish only)
+# Create notebook from YouTube video (Bash v1.3.0, Spanish only)
 ./crear_cuaderno.sh "URL"
 ./crear_cuaderno.sh "URL" --audio --slides  # Add rate-limited artifacts
 ./crear_cuaderno.sh "URL" --todo            # All artifacts
+./crear_cuaderno.sh "URL" --mostrar-descripcion
 
 # List notebooks
 python listar_cuadernos.py
 python listar_cuadernos.py --ordenar creacion --desc
+./listar_cuadernos_como_JSON_ordenados_por_fecha.sh  # JSON output
 ```
 
 ## Architecture
 
 ### Two Implementations
 
-- **main.py** (Python v0.3.3): Uses `notebooklm` Python API with asyncio. Generates report, audio, slides, infographic. Has smart quota handling (detects rate limits via `is_rate_limited`, skips related artifacts).
+- **main.py** (Python v0.6.0): Uses `notebooklm` Python API with asyncio. By default only generates report (no daily limit). Use `--todo` for all artifacts. Has smart quota handling (detects rate limits via `is_rate_limited`, skips related artifacts). Artifacts ordered by: no-limit first, then by generation time.
 
-- **crear_cuaderno.sh** (Bash v1.1.0): Uses `notebooklm` CLI. By default only generates artifacts without daily limits (report, mind-map). Optional flags for rate-limited artifacts: `--audio`, `--video`, `--slides`, `--infographic`, `--quiz`, `--flashcards`, `--todo`.
+- **crear_cuaderno.sh** (Bash v1.3.0): Uses `notebooklm` CLI. By default generates report and mind-map (no daily limits). Optional flags for rate-limited artifacts: `--audio`, `--video`, `--slides`, `--infographic`, `--quiz`, `--flashcards`, `--todo`.
 
 ### Notebook Naming Convention
 
@@ -75,7 +80,12 @@ This enables Claude Code to use NotebookLM commands directly via `/notebooklm` o
 
 **Credentials**: Stored in `~/.notebooklm/`. If authenticating from Windows PowerShell but running from WSL2:
 ```bash
-cp /mnt/c/Users/USERNAME/.notebooklm/storage_state.json ~/.notebooklm/
+cp /mnt/c/Users/$USER/.notebooklm/storage_state.json ~/.notebooklm/
+```
+
+Or use the helper script:
+```bash
+source zzz_asigna_ubicacion_fichero_configuracion.inc.sh
 ```
 
 **Git push**: SSH connections may hang in WSL2. Use HTTPS instead:

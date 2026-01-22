@@ -30,7 +30,12 @@ Se abrirá un navegador. Inicia sesión y espera a ver la página principal de N
 
 **Nota WSL2**: Si usas WSL2, las credenciales se guardan en `~/.notebooklm/`. Si te autenticas desde PowerShell, copia las credenciales:
 ```bash
-cp /mnt/c/Users/TU_USUARIO/.notebooklm/storage_state.json ~/.notebooklm/
+cp /mnt/c/Users/$USER/.notebooklm/storage_state.json ~/.notebooklm/
+```
+
+O usa el script auxiliar:
+```bash
+source zzz_asigna_ubicacion_fichero_configuracion.inc.sh
 ```
 
 ---
@@ -39,9 +44,10 @@ cp /mnt/c/Users/TU_USUARIO/.notebooklm/storage_state.json ~/.notebooklm/
 
 | Herramienta | Descripción | Lenguaje |
 |-------------|-------------|----------|
-| `main.py` | Crear cuadernos con todos los artefactos | Python |
+| `main.py` | Crear cuadernos con artefactos seleccionables | Python |
 | `crear_cuaderno.sh` | Crear cuadernos (versión simplificada) | Bash |
 | `listar_cuadernos.py` | Listar cuadernos disponibles | Python |
+| `listar_cuadernos_como_JSON_ordenados_por_fecha.sh` | Listar cuadernos en JSON | Bash |
 
 ---
 
@@ -66,13 +72,9 @@ Si alcanzas el límite, espera al día siguiente o suscríbete a NotebookLM Plus
 
 ## main.py - Crear cuadernos desde vídeos de YouTube (Python)
 
-Versión: **0.3.3**
+Versión: **0.6.0**
 
-Crea automáticamente un cuaderno en NotebookLM a partir de un vídeo de YouTube, generando:
-- Informe (Briefing Doc)
-- Resumen de audio (podcast)
-- Presentación (slides)
-- Infografía
+Crea automáticamente un cuaderno en NotebookLM a partir de un vídeo de YouTube. Por defecto solo genera el informe (sin límite diario).
 
 ### Uso básico
 
@@ -87,25 +89,40 @@ python main.py <URL_YOUTUBE>
 | `url` | URL del vídeo de YouTube (requerido) | - |
 | `--idioma` | Código de idioma para los artefactos | `es` |
 | `--mostrar-informe` | Muestra el contenido del informe por pantalla | No |
+| `--mostrar-descripcion` | Muestra la descripción del vídeo de YouTube | No |
 | `--timeout-fuente` | Segundos máx. para esperar procesamiento de fuente | `60` |
 | `--retardo` | Segundos de retardo entre inicio de cada generación | `3` |
 | `--debug` | Activa trazas detalladas de ejecución | No |
 | `--version`, `-v` | Muestra la versión del programa | - |
 
+### Opciones de artefactos
+
+| Opción | Descripción | Límite |
+|--------|-------------|--------|
+| (ninguna) | Solo genera report | No |
+| `--report` | Generar informe | No |
+| `--audio` | Generar resumen de audio | Sí |
+| `--slides` | Generar presentación | Sí |
+| `--infographic` | Generar infografía | Sí |
+| `--todo` | Generar todos los artefactos | Mixto |
+
 ### Ejemplos de uso
 
 ```bash
-# Crear cuaderno con idioma español (por defecto)
+# Solo informe (por defecto, sin límite)
 python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
+
+# Todos los artefactos
+python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --todo
+
+# Solo audio y slides
+python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --audio --slides
+
+# Ver descripción del vídeo
+python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --mostrar-descripcion
 
 # Crear cuaderno en inglés
 python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --idioma en
-
-# Crear cuaderno y mostrar el informe
-python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --mostrar-informe
-
-# Ajustar tiempos de espera
-python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --timeout-fuente 90 --retardo 5
 
 # Ejecutar con modo debug
 python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --debug
@@ -127,7 +144,7 @@ Las presentaciones e infografías comparten cuota; si una falla por límite, la 
 
 ## crear_cuaderno.sh - Crear cuadernos (Bash)
 
-Versión: **1.1.0**
+Versión: **1.3.0**
 
 Versión simplificada en Bash que usa el CLI `notebooklm` directamente. Por defecto solo genera artefactos sin límites de cuota.
 
@@ -150,6 +167,7 @@ Versión simplificada en Bash que usa el CLI `notebooklm` directamente. Por defe
 | `--flashcards` | Añadir flashcards | Sí |
 | `--todo` | Generar todos los artefactos | Mixto |
 | `--solo-limite` | Solo artefactos con límite | Sí |
+| `--mostrar-descripcion` | Mostrar descripción del vídeo | - |
 | `-h`, `--help` | Mostrar ayuda | - |
 
 ### Ejemplos de uso
@@ -166,55 +184,9 @@ Versión simplificada en Bash que usa el CLI `notebooklm` directamente. Por defe
 
 # Generar todos los artefactos
 ./crear_cuaderno.sh "https://www.youtube.com/watch?v=VIDEO_ID" --todo
-```
 
-### Salida de ejemplo
-
-```
-NotebookLM YouTube Importer (Bash) v1.1.0
-Idioma forzado: es
-Artefactos sin límite: report mind-map
-Artefactos con límite: audio
-  (pueden fallar si se alcanzó el límite diario)
-
-Video ID: dQw4w9WgXcQ
-Obteniendo metadatos del video...
-  Título: Rick Astley - Never Gonna Give You Up
-  Canal: Rick Astley
-  Fecha: 2009-10-25
-
-Nombre del cuaderno: YT-dQw4w9WgXcQ - Rick Astley - Never Gonna Give... - 2009-10-25 - Rick Astley
-
-Buscando cuaderno existente...
-Cuaderno creado: abc123-def456
-URL: https://notebooklm.google.com/notebook/abc123-def456
-
-Añadiendo video como fuente...
-Fuente añadida
-
-Estado de artefactos:
-  ✗ Report (Briefing Doc): no disponible
-  ✗ Mind Map: no disponible
-  ✗ Audio (Podcast): no disponible (⚠ límite)
-
-Generando 3 artefacto(s)...
-
-[12:30:45] Generando: Report (Briefing Doc)
-[12:30:52] ✓ Report (Briefing Doc) generado
-
-[12:30:52] Generando: Mind Map
-[12:30:55] ✓ Mind Map generado
-
-[12:30:55] Generando: Audio (Podcast) (⚠ límite diario)
-[12:31:02] ✓ Audio (Podcast) generado
-
-Artefactos generados: 3/3
-
-==================================================
-Proceso completado
-  Cuaderno: YT-dQw4w9WgXcQ - Rick Astley - Never Gonna Give... - 2009-10-25 - Rick Astley
-  URL: https://notebooklm.google.com/notebook/abc123-def456
-==================================================
+# Ver descripción del vídeo
+./crear_cuaderno.sh "https://www.youtube.com/watch?v=VIDEO_ID" --mostrar-descripcion
 ```
 
 ### Requisitos adicionales
@@ -258,30 +230,41 @@ python listar_cuadernos.py --ordenar nombre --desc
 python listar_cuadernos.py --ordenar creacion --desc
 ```
 
+### Alternativa en Bash (JSON)
+
+```bash
+./listar_cuadernos_como_JSON_ordenados_por_fecha.sh
+```
+
+Devuelve la lista de cuadernos en formato JSON ordenados por fecha de creación (más recientes primero).
+
 ---
 
 ## Estructura del proyecto
 
 ```
 crear_cuaderno_notebookLM_desde_video_YT/
-├── main.py              # Crear cuadernos desde YouTube (Python)
-├── crear_cuaderno.sh    # Crear cuadernos desde YouTube (Bash)
-├── listar_cuadernos.py  # Listar cuadernos disponibles
-├── requirements.txt     # Dependencias Python
-├── README.md            # Esta documentación
-└── .gitignore           # Archivos ignorados por git
+├── main.py                                    # Crear cuadernos (Python)
+├── crear_cuaderno.sh                          # Crear cuadernos (Bash)
+├── listar_cuadernos.py                        # Listar cuadernos (Python)
+├── listar_cuadernos_como_JSON_ordenados_por_fecha.sh  # Listar en JSON
+├── zzz_asigna_ubicacion_fichero_configuracion.inc.sh  # Config WSL2
+├── requirements.txt                           # Dependencias Python
+├── CLAUDE.md                                  # Guía para Claude Code
+├── README.md                                  # Esta documentación
+└── .gitignore                                 # Archivos ignorados
 ```
 
 ## Comparativa main.py vs crear_cuaderno.sh
 
 | Aspecto | main.py | crear_cuaderno.sh |
 |---------|---------|-------------------|
-| Artefactos por defecto | report, audio, slides, infographic | report, mind-map |
-| Límites cuota | Sí (con manejo inteligente) | Evitados por defecto |
+| Artefactos por defecto | report | report, mind-map |
+| Límites cuota | Evitados por defecto | Evitados por defecto |
 | Idioma | Configurable (`--idioma`) | Forzado español |
 | Dependencias | Python + asyncio | Bash + jq |
-| Complejidad | Mayor (más funciones) | Menor (más simple) |
 | Cuota compartida | Detecta y omite | No implementado |
+| Orden generación | Sin límite primero, luego por tiempo | Sin límite primero, luego por tiempo |
 
 ## Notas
 
@@ -308,8 +291,13 @@ Ejecuta `notebooklm login` y asegúrate de completar el proceso de autenticació
 
 Si te autenticaste desde PowerShell pero ejecutas desde WSL2:
 ```bash
+source zzz_asigna_ubicacion_fichero_configuracion.inc.sh
+```
+
+O manualmente:
+```bash
 mkdir -p ~/.notebooklm
-cp /mnt/c/Users/TU_USUARIO/.notebooklm/storage_state.json ~/.notebooklm/
+cp /mnt/c/Users/$USER/.notebooklm/storage_state.json ~/.notebooklm/
 ```
 
 ### Límite diario alcanzado
@@ -321,7 +309,7 @@ cp /mnt/c/Users/TU_USUARIO/.notebooklm/storage_state.json ~/.notebooklm/
 Opciones:
 1. Esperar al día siguiente
 2. Suscribirse a NotebookLM Plus
-3. Usar `crear_cuaderno.sh` sin opciones (solo genera artefactos sin límite)
+3. Usar los scripts sin opciones (solo genera artefactos sin límite)
 
 ### Error 403 Forbidden en yt-dlp
 
