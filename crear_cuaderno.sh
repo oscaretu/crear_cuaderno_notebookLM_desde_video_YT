@@ -18,18 +18,22 @@
 #   --flashcards   Generar flashcards (límite diario)
 #   --todo         Generar todos los artefactos
 #   --solo-limite  Solo artefactos con límite (sin report/mind-map)
+#   --mostrar-descripcion  Mostrar la descripción del vídeo de YouTube
 #
 # Requisitos:
 #   - notebooklm CLI instalado y autenticado (notebooklm login)
 #   - yt-dlp instalado
 #   - jq instalado (para parsear JSON)
 #
-# Versión: 1.1.0
+# Versión: 1.3.0
 
 set -e
 
-VERSION="1.2.0"
+VERSION="1.3.0"
 IDIOMA="es"
+
+# Mostrar descripción del vídeo
+OPT_DESCRIPCION=0
 
 # Opciones de artefactos (0=no generar, 1=generar)
 OPT_REPORT=1
@@ -85,7 +89,8 @@ Opciones:
   --flashcards   Generar flashcards (⚠ límite diario)
   --todo         Generar todos los artefactos
   --solo-limite  Solo artefactos con límite (omite report/mind-map)
-  -h, --help     Mostrar esta ayuda
+  --mostrar-descripcion  Mostrar la descripción del vídeo de YouTube
+  -h, --help             Mostrar esta ayuda
 
 Por defecto genera (sin límites):
   - Report (Briefing Doc)
@@ -96,6 +101,7 @@ Ejemplos:
   ./crear_cuaderno.sh "https://www.youtube.com/watch?v=VIDEO_ID" --audio
   ./crear_cuaderno.sh "https://www.youtube.com/watch?v=VIDEO_ID" --todo
   ./crear_cuaderno.sh "https://www.youtube.com/watch?v=VIDEO_ID" --slides --infographic
+  ./crear_cuaderno.sh "https://www.youtube.com/watch?v=VIDEO_ID" --mostrar-descripcion
 EOF
     exit 0
 }
@@ -283,6 +289,10 @@ parse_args() {
                 OPT_FLASHCARDS=1
                 shift
                 ;;
+            --mostrar-descripcion)
+                OPT_DESCRIPCION=1
+                shift
+                ;;
             -*)
                 error "Opción desconocida: $1"
                 ;;
@@ -302,6 +312,15 @@ parse_args() {
 
 # Main
 main() {
+    # Verificar --help antes de parsear (porque parse_args corre en subshell)
+    for arg in "$@"; do
+        case "$arg" in
+            -h|--help)
+                mostrar_ayuda
+                ;;
+        esac
+    done
+
     # Parsear argumentos
     local url
     url=$(parse_args "$@")
@@ -370,6 +389,21 @@ main() {
     echo "  Título: $titulo"
     echo "  Canal: $canal"
     echo "  Fecha: $fecha"
+
+    # Mostrar descripción si se solicita
+    if [ "$OPT_DESCRIPCION" = "1" ]; then
+        local descripcion
+        descripcion=$(yt-dlp --print "%(description)s" "$url" 2>/dev/null) || descripcion=""
+        if [ -n "$descripcion" ]; then
+            echo ""
+            echo "============================================================"
+            echo "DESCRIPCIÓN DEL VÍDEO"
+            echo "============================================================"
+            echo "$descripcion"
+            echo "============================================================"
+            echo ""
+        fi
+    fi
 
     # Generar nombre del cuaderno
     local titulo_limpio canal_limpio nombre_cuaderno

@@ -5,15 +5,27 @@ Aplicación para crear cuadernos en NotebookLM desde vídeos de YouTube.
 Uso:
     python main.py <URL_YOUTUBE> [opciones]
 
-Opciones:
-    --mostrar-informe    Muestra el contenido del informe por pantalla
-    --idioma CODIGO      Idioma para el audio (default: es)
-    --debug              Activa el modo debug con trazas detalladas
+Opciones generales:
+    --mostrar-informe      Muestra el contenido del informe por pantalla
+    --mostrar-descripcion  Muestra la descripción del vídeo de YouTube
+    --idioma CODIGO        Idioma para el audio (default: es)
+    --debug                Activa el modo debug con trazas detalladas
+
+Opciones de artefactos:
+    --report               Generar informe (sin límite)
+    --audio                Generar resumen de audio (límite diario)
+    --slides               Generar presentación (límite diario)
+    --infographic          Generar infografía (límite diario)
+    --todo                 Generar todos los artefactos
+
+Por defecto solo genera el informe (sin límite diario).
 
 Ejemplo:
-    python main.py "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-    python main.py "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --mostrar-informe
-    python main.py "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --debug
+    python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
+    python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --todo
+    python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --audio --slides
+    python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --mostrar-informe
+    python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --debug
 
 Requisitos previos:
     1. pip install -r requirements.txt
@@ -35,7 +47,7 @@ import yt_dlp
 from notebooklm import NotebookLMClient
 
 # Versión del programa
-VERSION = "0.4.0"
+VERSION = "0.6.0"
 
 # Variable global para modo debug
 DEBUG = False
@@ -114,6 +126,7 @@ def obtener_metadatos_video(url: str) -> dict:
             'canal': info.get('channel', info.get('uploader', 'Canal desconocido')),
             'fecha': fecha,
             'video_id': info.get('id', ''),
+            'descripcion': info.get('description', ''),
         }
         debug(f"Metadatos extraídos: {metadatos}")
         return metadatos
@@ -155,16 +168,20 @@ async def buscar_cuaderno_existente(client: NotebookLMClient, video_id: str):
 
 
 # Mapeo de tipos de artefactos (ordenados: sin límite primero, luego por tiempo)
+# Formato: (nombre_display, tiene_limite_diario)
 # report: sin límite, 5-15 min
 # slides: con límite, tiempo medio
 # infographic: con límite, tiempo medio (comparte cuota con slides)
 # audio: con límite, 10-20 min (penúltimo)
 TIPOS_ARTEFACTOS = {
-    'report': 'Informe',
-    'slides': 'Presentación (Slides)',
-    'infographic': 'Infografía',
-    'audio': 'Resumen de Audio',
+    'report': ('Informe', False),
+    'slides': ('Presentación (Slides)', True),
+    'infographic': ('Infografía', True),
+    'audio': ('Resumen de Audio', True),
 }
+
+# Lista ordenada de tipos (el orden importa para generación)
+ORDEN_ARTEFACTOS = ['report', 'slides', 'infographic', 'audio']
 
 
 def artefacto_tiene_idioma(artefacto, idioma: str) -> bool:
@@ -386,7 +403,9 @@ async def mostrar_informe(client, notebook_id: str):
 
 
 async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: str = 'es',
-                         timeout_fuente: float = 60.0, retardo: float = 3.0):
+                         timeout_fuente: float = 60.0, retardo: float = 3.0,
+                         mostrar_descripcion: bool = False,
+                         artefactos_solicitados: set = None):
     """Procesa un vídeo de YouTube: crea cuaderno y genera artefactos.
 
     Args:
@@ -395,7 +414,12 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
         idioma: Código de idioma para los artefactos
         timeout_fuente: Segundos máx. para esperar procesamiento de fuente
         retardo: Segundos de retardo entre inicio de cada generación
+        mostrar_descripcion: Si True, muestra la descripción del vídeo
+        artefactos_solicitados: Conjunto de tipos de artefactos a generar
     """
+    # Por defecto, solo artefactos sin límite (report)
+    if artefactos_solicitados is None:
+        artefactos_solicitados = {'report'}
     debug("="*60)
     debug("INICIO procesar_video()")
     debug(f"  URL: {url}")
@@ -426,6 +450,14 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
         print(f"  Canal: {metadatos['canal']}")
         print(f"  Fecha: {metadatos['fecha']}")
         debug(f"  Metadatos obtenidos correctamente")
+
+        # Mostrar descripción si se solicita
+        if mostrar_descripcion and metadatos.get('descripcion'):
+            print("\n" + "="*60)
+            print("DESCRIPCIÓN DEL VÍDEO")
+            print("="*60)
+            print(metadatos['descripcion'])
+            print("="*60 + "\n")
     except Exception as e:
         print(f"Error obteniendo metadatos: {e}")
         debug(f"  Excepción en metadatos: {type(e).__name__}: {e}")
@@ -459,23 +491,46 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
             # Mostrar estado de cada artefacto
             print("\nEstado de artefactos:")
             faltantes = []
-            for tipo, nombre in TIPOS_ARTEFACTOS.items():
+            faltantes_con_limite = []
+            for tipo in ORDEN_ARTEFACTOS:
+                nombre, tiene_limite = TIPOS_ARTEFACTOS[tipo]
                 artefacto = existentes[tipo]
                 if artefacto:
                     # Mostrar info del artefacto si está disponible
                     titulo = getattr(artefacto, 'title', None) or getattr(artefacto, 'id', 'disponible')
                     print(f"  ✓ {nombre}: {titulo}")
                 else:
-                    print(f"  ✗ {nombre}: no disponible")
+                    limite_hint = " (⚠ límite diario)" if tiene_limite else ""
+                    print(f"  ✗ {nombre}: no disponible{limite_hint}")
                     faltantes.append(tipo)
+                    if tiene_limite:
+                        faltantes_con_limite.append(tipo)
 
-            # Generar los faltantes
-            if faltantes:
-                print(f"\nGenerando {len(faltantes)} artefacto(s) faltante(s)...")
-                exitosos = await generar_artefactos(client, notebook.id, faltantes, idioma, retardo)
-                print(f"\n  Artefactos generados: {exitosos}/{len(faltantes)}")
+            # Determinar qué artefactos generar según las opciones
+            a_generar = []
+            for tipo in faltantes:
+                if tipo in artefactos_solicitados:
+                    a_generar.append(tipo)
+
+            # Generar los solicitados que faltan
+            if a_generar:
+                print(f"\nGenerando {len(a_generar)} artefacto(s)...")
+                exitosos = await generar_artefactos(client, notebook.id, a_generar, idioma, retardo)
+                print(f"\n  Artefactos generados: {exitosos}/{len(a_generar)}")
+            elif faltantes:
+                # Hay faltantes pero no se solicitaron
+                print(f"\n  No se generaron artefactos (no solicitados)")
             else:
                 print("\n✓ Todos los artefactos ya están disponibles")
+
+            # Mostrar sugerencias para artefactos faltantes no solicitados
+            faltantes_no_solicitados = [t for t in faltantes if t not in artefactos_solicitados]
+            if faltantes_no_solicitados:
+                print("\nPara generar artefactos faltantes, usa:")
+                opciones = []
+                for tipo in faltantes_no_solicitados:
+                    opciones.append(f"--{tipo}")
+                print(f"  python main.py \"{url}\" {' '.join(opciones)}")
 
             # Mostrar informe si se solicita
             if mostrar_informe_flag and existentes['report']:
@@ -507,12 +562,19 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
             print(f"✓ Fuente añadida (aviso al esperar: {e})")
             debug(f"  Fuente añadida pero error en espera: {e}")
 
-        # 7. Generar todos los artefactos
-        debug("PASO 7: Generar todos los artefactos")
-        todos_los_tipos = list(TIPOS_ARTEFACTOS.keys())
-        exitosos = await generar_artefactos(client, notebook.id, todos_los_tipos, idioma, retardo)
-        print(f"\n  Artefactos generados: {exitosos}/{len(todos_los_tipos)}")
-        debug(f"  Artefactos exitosos: {exitosos}/{len(todos_los_tipos)}")
+        # 7. Generar artefactos solicitados
+        debug("PASO 7: Generar artefactos solicitados")
+        tipos_a_generar = [t for t in ORDEN_ARTEFACTOS if t in artefactos_solicitados]
+        exitosos = await generar_artefactos(client, notebook.id, tipos_a_generar, idioma, retardo)
+        print(f"\n  Artefactos generados: {exitosos}/{len(tipos_a_generar)}")
+        debug(f"  Artefactos exitosos: {exitosos}/{len(tipos_a_generar)}")
+
+        # Mostrar sugerencias para artefactos no solicitados
+        no_solicitados = [t for t in ORDEN_ARTEFACTOS if t not in artefactos_solicitados]
+        if no_solicitados:
+            print("\nPara generar otros artefactos, usa:")
+            opciones = [f"--{t}" for t in no_solicitados]
+            print(f"  python main.py \"{url}\" {' '.join(opciones)}")
 
         # Mostrar informe si se solicita
         if mostrar_informe_flag:
@@ -541,16 +603,20 @@ def main():
         epilog='''
 Ejemplos:
   python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
+  python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --todo
+  python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --audio --slides
   python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --mostrar-informe
   python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --idioma en
-  python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --timeout-fuente 90
-  python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --retardo 5
   python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --debug
+
+Por defecto solo genera el informe (sin límite). Use --todo para todos.
         '''
     )
     parser.add_argument('url', help='URL del vídeo de YouTube')
     parser.add_argument('--mostrar-informe', action='store_true',
                         help='Muestra el contenido del informe por pantalla')
+    parser.add_argument('--mostrar-descripcion', action='store_true',
+                        help='Muestra la descripción del vídeo de YouTube')
     parser.add_argument('--idioma', default='es',
                         help='Código de idioma para audio e informe (default: es)')
     parser.add_argument('--timeout-fuente', type=float, default=60.0,
@@ -559,6 +625,20 @@ Ejemplos:
                         help='Segundos de retardo entre inicio de cada generación (default: 3)')
     parser.add_argument('--debug', action='store_true',
                         help='Activa el modo debug con trazas detalladas')
+
+    # Opciones de artefactos
+    artefactos_group = parser.add_argument_group('artefactos',
+        'Por defecto solo genera el informe (sin límite diario)')
+    artefactos_group.add_argument('--report', action='store_true',
+                        help='Generar informe (sin límite)')
+    artefactos_group.add_argument('--audio', action='store_true',
+                        help='Generar resumen de audio (⚠ límite diario)')
+    artefactos_group.add_argument('--slides', action='store_true',
+                        help='Generar presentación (⚠ límite diario)')
+    artefactos_group.add_argument('--infographic', action='store_true',
+                        help='Generar infografía (⚠ límite diario)')
+    artefactos_group.add_argument('--todo', action='store_true',
+                        help='Generar todos los artefactos')
 
     parser.add_argument('--version', '-v', action='version',
                         version=f'%(prog)s {VERSION}')
@@ -572,11 +652,39 @@ Ejemplos:
         DEBUG = True
         debug("Modo DEBUG activado")
         debug(f"Argumentos: url={args.url}, mostrar_informe={args.mostrar_informe}, "
-              f"idioma={args.idioma}, timeout_fuente={args.timeout_fuente}, retardo={args.retardo}")
+              f"idioma={args.idioma}, timeout_fuente={args.timeout_fuente}, retardo={args.retardo}, "
+              f"mostrar_descripcion={args.mostrar_descripcion}, todo={args.todo}")
 
     # Mostrar recordatorio de idioma por defecto
     if args.idioma == 'es':
         print("Nota: Usando idioma español por defecto. Usa --idioma para cambiar (ej: --idioma en)")
+
+    # Determinar qué artefactos generar
+    artefactos_solicitados = set()
+    if args.todo:
+        artefactos_solicitados = set(TIPOS_ARTEFACTOS.keys())
+    else:
+        if args.report:
+            artefactos_solicitados.add('report')
+        if args.audio:
+            artefactos_solicitados.add('audio')
+        if args.slides:
+            artefactos_solicitados.add('slides')
+        if args.infographic:
+            artefactos_solicitados.add('infographic')
+
+        # Si no se especificó ninguno, usar solo report (sin límite)
+        if not artefactos_solicitados:
+            artefactos_solicitados = {'report'}
+            print("Nota: Por defecto solo se genera el informe. Usa --todo para todos, o --audio/--slides/etc.")
+
+    # Mostrar qué se va a generar
+    sin_limite = [t for t in artefactos_solicitados if not TIPOS_ARTEFACTOS[t][1]]
+    con_limite = [t for t in artefactos_solicitados if TIPOS_ARTEFACTOS[t][1]]
+    if sin_limite:
+        print(f"Artefactos sin límite: {', '.join(sin_limite)}")
+    if con_limite:
+        print(f"Artefactos con límite: {', '.join(con_limite)} (pueden fallar si se alcanzó el límite diario)")
 
     try:
         asyncio.run(procesar_video(
@@ -584,7 +692,9 @@ Ejemplos:
             args.mostrar_informe,
             args.idioma,
             args.timeout_fuente,
-            args.retardo
+            args.retardo,
+            args.mostrar_descripcion,
+            artefactos_solicitados
         ))
     except Exception as e:
         print(f"\nError: {e}")
