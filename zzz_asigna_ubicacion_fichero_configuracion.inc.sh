@@ -16,8 +16,11 @@ echo "  1. Abre PowerShell y vete al directorio del proyecto"
 echo "  2. Ejecuta: notebooklm login"
 echo
 
+# Determinar nombre de usuario (fallback si $USER está vacío)
+CURRENT_USER="${USER:-${LOGNAME:-$(whoami)}}"
+
 # Configurar NOTEBOOKLM_HOME
-export NOTEBOOKLM_HOME="/mnt/c/Users/${USER}/.notebooklm"
+export NOTEBOOKLM_HOME="/mnt/c/Users/${CURRENT_USER}/.notebooklm"
 echo "Exportando la variable NOTEBOOKLM_HOME..."
 echo "  NOTEBOOKLM_HOME=$NOTEBOOKLM_HOME"
 echo
@@ -39,8 +42,8 @@ echo
 echo "  ┌──────────────────────┬─────────────────────────────────────────────────────┐"
 echo "  │       Entorno        │               Ruta del archivo                      │"
 echo "  ├──────────────────────┼─────────────────────────────────────────────────────┤"
-echo "  │ Windows (PowerShell) │ C:\\Users\\${USER}\\.notebooklm\\storage_state.json   │"
+echo "  │ Windows (PowerShell) │ C:\\Users\\${CURRENT_USER}\\.notebooklm\\storage_state.json   │"
 echo "  ├──────────────────────┼─────────────────────────────────────────────────────┤"
-echo "  │ WSL2 (Linux)         │ /home/${USER}/.notebooklm/storage_state.json        │"
+echo "  │ WSL2 (Linux)         │ /home/${CURRENT_USER}/.notebooklm/storage_state.json        │"
 echo "  └──────────────────────┴─────────────────────────────────────────────────────┘"
 echo
