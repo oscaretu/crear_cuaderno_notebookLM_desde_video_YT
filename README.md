@@ -45,6 +45,7 @@ source zzz_asigna_ubicacion_fichero_configuracion.inc.sh
 | Herramienta | Descripción | Lenguaje |
 |-------------|-------------|----------|
 | `main.py` | Crear cuadernos con artefactos seleccionables | Python |
+| `ver_cuaderno.py` | Consultar y gestionar artefactos de un cuaderno existente | Python |
 | `crear_cuaderno.sh` | Crear cuadernos (versión simplificada) | Bash |
 | `listar_cuadernos.py` | Listar cuadernos disponibles | Python |
 | `listar_cuadernos_como_JSON_ordenados_por_fecha.sh` | Listar cuadernos en JSON | Bash |
@@ -72,7 +73,7 @@ Si alcanzas el límite, espera al día siguiente o suscríbete a NotebookLM Plus
 
 ## main.py - Crear cuadernos desde vídeos de YouTube (Python)
 
-Versión: **0.6.0**
+Versión: **0.7.0**
 
 Crea automáticamente un cuaderno en NotebookLM a partir de un vídeo de YouTube. Por defecto solo genera el informe (sin límite diario).
 
@@ -139,6 +140,68 @@ El script detecta cuando se alcanza el límite diario y muestra un mensaje claro
 ```
 
 Las presentaciones e infografías comparten cuota; si una falla por límite, la otra se omite automáticamente.
+
+---
+
+## ver_cuaderno.py - Consultar y gestionar artefactos de un cuaderno existente
+
+Versión: **0.1.0**
+
+Permite consultar el estado de un cuaderno existente en NotebookLM y, opcionalmente, generar los artefactos que falten. Acepta una URL de NotebookLM o un ID de cuaderno directamente.
+
+### Uso básico
+
+```bash
+# Consultar estado (sin generar nada)
+python ver_cuaderno.py <URL_O_ID>
+```
+
+### Parámetros
+
+| Parámetro | Descripción | Default |
+|-----------|-------------|---------|
+| `notebook` | URL de NotebookLM o ID del cuaderno (requerido) | - |
+| `--idioma` | Código de idioma para filtrar/generar artefactos | `es` |
+| `--mostrar-informe` | Muestra el contenido del informe por pantalla | No |
+| `--retardo` | Segundos de retardo entre inicio de cada generación | `3` |
+| `--debug` | Activa trazas detalladas de ejecución | No |
+| `--version`, `-v` | Muestra la versión del programa | - |
+
+### Opciones de artefactos
+
+| Opción | Descripción | Límite |
+|--------|-------------|--------|
+| (ninguna) | Solo consulta, no genera nada | - |
+| `--report` | Generar informe | No |
+| `--audio` | Generar resumen de audio | Sí |
+| `--slides` | Generar presentación | Sí |
+| `--infographic` | Generar infografía | Sí |
+| `--todo` | Generar todos los artefactos que falten | Mixto |
+
+### Ejemplos de uso
+
+```bash
+# Consultar estado con URL completa
+python ver_cuaderno.py "https://notebooklm.google.com/notebook/NOTEBOOK_ID"
+
+# Consultar estado con ID directo
+python ver_cuaderno.py "NOTEBOOK_ID"
+
+# Generar todos los artefactos que falten
+python ver_cuaderno.py "NOTEBOOK_ID" --todo
+
+# Generar solo audio y slides
+python ver_cuaderno.py "NOTEBOOK_ID" --audio --slides
+
+# Ver contenido del informe
+python ver_cuaderno.py "NOTEBOOK_ID" --mostrar-informe
+
+# Consultar artefactos en inglés
+python ver_cuaderno.py "NOTEBOOK_ID" --idioma en
+
+# Ejecutar con modo debug
+python ver_cuaderno.py "NOTEBOOK_ID" --debug
+```
 
 ---
 
@@ -244,7 +307,9 @@ Devuelve la lista de cuadernos en formato JSON ordenados por fecha de creación 
 
 ```
 crear_cuaderno_notebookLM_desde_video_YT/
-├── main.py                                    # Crear cuadernos (Python)
+├── common.py                                  # Módulo compartido (artefactos, debug, etc.)
+├── main.py                                    # Crear cuadernos desde YouTube (Python)
+├── ver_cuaderno.py                            # Consultar/gestionar cuadernos existentes (Python)
 ├── crear_cuaderno.sh                          # Crear cuadernos (Bash)
 ├── listar_cuadernos.py                        # Listar cuadernos (Python)
 ├── listar_cuadernos_como_JSON_ordenados_por_fecha.sh  # Listar en JSON
@@ -255,16 +320,18 @@ crear_cuaderno_notebookLM_desde_video_YT/
 └── .gitignore                                 # Archivos ignorados
 ```
 
-## Comparativa main.py vs crear_cuaderno.sh
+## Comparativa de herramientas de creación/gestión
 
-| Aspecto | main.py | crear_cuaderno.sh |
-|---------|---------|-------------------|
-| Artefactos por defecto | report | report, mind-map |
-| Límites cuota | Evitados por defecto | Evitados por defecto |
-| Idioma | Configurable (`--idioma`) | Forzado español |
-| Dependencias | Python + asyncio | Bash + jq |
-| Cuota compartida | Detecta y omite | No implementado |
-| Orden generación | Sin límite primero, luego por tiempo | Sin límite primero, luego por tiempo |
+| Aspecto | main.py | ver_cuaderno.py | crear_cuaderno.sh |
+|---------|---------|-----------------|-------------------|
+| Entrada | URL de YouTube | ID o URL de cuaderno | URL de YouTube |
+| Función principal | Crear cuaderno | Consultar/generar artefactos | Crear cuaderno |
+| Artefactos por defecto | report | ninguno (solo consulta) | report, mind-map |
+| Límites cuota | Evitados por defecto | Evitados por defecto | Evitados por defecto |
+| Idioma | Configurable (`--idioma`) | Configurable (`--idioma`) | Forzado español |
+| Dependencias | Python + asyncio | Python + asyncio | Bash + jq |
+| Cuota compartida | Detecta y omite | Detecta y omite | No implementado |
+| Módulo compartido | `common.py` | `common.py` | - |
 
 ## Notas
 

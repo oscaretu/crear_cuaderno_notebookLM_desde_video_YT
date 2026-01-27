@@ -23,7 +23,7 @@ sudo apt install jq  # Linux/WSL
 ## Key Commands
 
 ```bash
-# Create notebook from YouTube video (Python v0.6.0)
+# Create notebook from YouTube video (Python v0.7.0)
 python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
 python main.py "URL" --todo                 # All artifacts
 python main.py "URL" --audio --slides       # Specific artifacts
@@ -36,6 +36,14 @@ python main.py "URL" --idioma en --debug
 ./crear_cuaderno.sh "URL" --todo            # All artifacts
 ./crear_cuaderno.sh "URL" --mostrar-descripcion
 
+# View/manage existing notebook (Python v0.1.0)
+python ver_cuaderno.py "NOTEBOOK_ID"                  # View artifacts
+python ver_cuaderno.py "https://notebooklm.google.com/notebook/ID"
+python ver_cuaderno.py "NOTEBOOK_ID" --todo           # Generate missing artifacts
+python ver_cuaderno.py "NOTEBOOK_ID" --audio --slides # Specific artifacts
+python ver_cuaderno.py "NOTEBOOK_ID" --mostrar-informe
+python ver_cuaderno.py "NOTEBOOK_ID" --idioma en --debug
+
 # List notebooks
 python listar_cuadernos.py
 python listar_cuadernos.py --ordenar creacion --desc
@@ -44,9 +52,15 @@ python listar_cuadernos.py --ordenar creacion --desc
 
 ## Architecture
 
-### Two Implementations
+### Shared Module
 
-- **main.py** (Python v0.6.0): Uses `notebooklm` Python API with asyncio. By default only generates report (no daily limit). Use `--todo` for all artifacts. Has smart quota handling (detects rate limits via `is_rate_limited`, skips related artifacts). Artifacts ordered by: no-limit first, then by generation time.
+- **common.py**: Shared functions and constants used by `main.py` and `ver_cuaderno.py`. Contains: `debug()`, `set_debug()`, `timestamp()`, artifact constants (`TIPOS_ARTEFACTOS`, `ORDEN_ARTEFACTOS`), `verificar_artefactos_existentes()`, `generar_artefactos()`, `mostrar_informe()`, `mostrar_estado_artefactos()`, `artefacto_tiene_idioma()`.
+
+### Scripts
+
+- **main.py** (Python v0.7.0): Creates notebooks from YouTube videos. Uses `notebooklm` Python API with asyncio. By default only generates report (no daily limit). Use `--todo` for all artifacts. Has smart quota handling (detects rate limits via `is_rate_limited`, skips related artifacts). Artifacts ordered by: no-limit first, then by generation time.
+
+- **ver_cuaderno.py** (Python v0.1.0): Views and manages artifacts of an existing notebook. Accepts a NotebookLM URL or notebook ID. Without artifact flags, only shows current state. With `--todo` or `--report`/`--audio`/etc., generates missing artifacts.
 
 - **crear_cuaderno.sh** (Bash v1.3.0): Uses `notebooklm` CLI. By default generates report and mind-map (no daily limits). Optional flags for rate-limited artifacts: `--audio`, `--video`, `--slides`, `--infographic`, `--quiz`, `--flashcards`, `--todo`.
 
