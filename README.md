@@ -20,7 +20,9 @@ brew install jq      # macOS
 
 ### Autenticación
 
-Antes de usar cualquier herramienta, debes autenticarte con tu cuenta de Google:
+Hay dos formas de autenticarse:
+
+#### Opción 1: Login estándar (abre navegador)
 
 ```bash
 notebooklm login
@@ -28,15 +30,34 @@ notebooklm login
 
 Se abrirá un navegador. Inicia sesión y espera a ver la página principal de NotebookLM, luego presiona ENTER en la terminal.
 
-**Nota WSL2**: Si usas WSL2, las credenciales se guardan en `~/.notebooklm/`. Si te autenticas desde PowerShell, copia las credenciales:
+#### Opción 2: Extraer cookies de Firefox (recomendado para WSL2)
+
+Si ya tienes Firefox abierto con una sesión activa de Google, puedes extraer las cookies sin necesidad de hacer login de nuevo:
+
 ```bash
-cp /mnt/c/Users/$USER/.notebooklm/storage_state.json ~/.notebooklm/
+python extraer_cookies_firefox.py
 ```
 
-O usa el script auxiliar:
+Esto es especialmente útil en WSL2, donde Firefox está instalado en Windows pero ejecutas los scripts desde Linux.
+
+Ver perfiles de Firefox disponibles:
 ```bash
-source zzz_asigna_ubicacion_fichero_configuracion.inc.sh
+python extraer_cookies_firefox.py --listar-perfiles
 ```
+
+Usar un perfil específico:
+```bash
+python extraer_cookies_firefox.py --perfil Susana
+```
+
+Verificar que la autenticación funciona:
+```bash
+notebooklm auth check --test
+```
+
+**Plataformas soportadas**: WSL2, Windows (PowerShell), Linux, macOS (detecta automáticamente).
+
+Las credenciales se guardan en `~/.notebooklm/storage_state.json`.
 
 ---
 
@@ -49,6 +70,7 @@ source zzz_asigna_ubicacion_fichero_configuracion.inc.sh
 | `crear_cuaderno.sh` | Crear cuadernos (versión simplificada) | Bash |
 | `listar_cuadernos.py` | Listar cuadernos disponibles | Python |
 | `listar_cuadernos_como_JSON_ordenados_por_fecha.sh` | Listar cuadernos en JSON | Bash |
+| `extraer_cookies_firefox.py` | Extraer cookies de Firefox para autenticación | Python |
 
 ---
 
@@ -303,6 +325,65 @@ Devuelve la lista de cuadernos en formato JSON ordenados por fecha de creación 
 
 ---
 
+## extraer_cookies_firefox.py - Extraer cookies de Firefox para autenticación
+
+Versión: **1.0.0**
+
+Extrae las cookies de autenticación de Google desde Firefox y genera el archivo `storage_state.json` que necesita notebooklm-py. Esto evita tener que ejecutar `notebooklm login` y es especialmente útil en WSL2.
+
+### Ventajas
+
+- No necesitas hacer login de nuevo si ya tienes sesión activa en Firefox
+- Firefox puede seguir abierto durante la extracción
+- Las cookies duran más porque compartes la sesión con tu navegador habitual
+- Funciona en WSL2, Windows, Linux y macOS (detecta automáticamente)
+
+### Uso básico
+
+```bash
+python extraer_cookies_firefox.py
+```
+
+### Parámetros
+
+| Parámetro | Descripción | Default |
+|-----------|-------------|---------|
+| `--usuario`, `-u` | Usuario de Windows/Linux/macOS | `oscar` |
+| `--perfil`, `-p` | Nombre del perfil de Firefox | `default-release` |
+| `--output`, `-o` | Ruta del archivo de salida | `~/.notebooklm/storage_state.json` |
+| `--dry-run`, `-n` | Solo muestra cookies, no escribe archivo | No |
+| `--verbose`, `-v` | Muestra información detallada | No |
+| `--listar-perfiles`, `-l` | Lista los perfiles de Firefox disponibles | No |
+
+### Ejemplos de uso
+
+```bash
+# Usar perfil por defecto
+python extraer_cookies_firefox.py
+
+# Ver perfiles disponibles
+python extraer_cookies_firefox.py --listar-perfiles
+
+# Usar perfil específico (acepta nombre bonito o completo)
+python extraer_cookies_firefox.py --perfil Susana
+python extraer_cookies_firefox.py --perfil "kyetl4dz.Susana"
+
+# Ver qué haría sin escribir archivo
+python extraer_cookies_firefox.py --dry-run --verbose
+
+# Verificar autenticación después de extraer
+notebooklm auth check --test
+```
+
+### Cómo funciona
+
+1. **Localiza el perfil de Firefox** según la plataforma (WSL2, Windows, Linux, macOS)
+2. **Copia la base de datos de cookies** (Firefox puede estar abierto)
+3. **Filtra las cookies de Google** necesarias para NotebookLM (~24 cookies)
+4. **Genera el archivo JSON** en formato compatible con Playwright
+
+---
+
 ## Estructura del proyecto
 
 ```
@@ -313,6 +394,7 @@ crear_cuaderno_notebookLM_desde_video_YT/
 ├── crear_cuaderno.sh                          # Crear cuadernos (Bash)
 ├── listar_cuadernos.py                        # Listar cuadernos (Python)
 ├── listar_cuadernos_como_JSON_ordenados_por_fecha.sh  # Listar en JSON
+├── extraer_cookies_firefox.py                 # Extraer cookies de Firefox
 ├── zzz_asigna_ubicacion_fichero_configuracion.inc.sh  # Config WSL2
 ├── requirements.txt                           # Dependencias Python
 ├── CLAUDE.md                                  # Guía para Claude Code
@@ -352,17 +434,23 @@ crear_cuaderno_notebookLM_desde_video_YT/
 Error: Missing required cookies: {'SID'}
 ```
 
-Ejecuta `notebooklm login` y asegúrate de completar el proceso de autenticación.
+Opciones:
+1. Ejecuta `notebooklm login` y completa el proceso de autenticación
+2. Si tienes Firefox con sesión de Google activa, usa `python extraer_cookies_firefox.py`
 
 ### Error en WSL2
 
-Si te autenticaste desde PowerShell pero ejecutas desde WSL2:
+Si ejecutas desde WSL2 y tienes Firefox en Windows con sesión activa:
 ```bash
-source zzz_asigna_ubicacion_fichero_configuracion.inc.sh
+python extraer_cookies_firefox.py
 ```
 
-O manualmente:
+Alternativas manuales:
 ```bash
+# Opción 1: Script auxiliar
+source zzz_asigna_ubicacion_fichero_configuracion.inc.sh
+
+# Opción 2: Copiar manualmente (si usaste notebooklm login en PowerShell)
 mkdir -p ~/.notebooklm
 cp /mnt/c/Users/$USER/.notebooklm/storage_state.json ~/.notebooklm/
 ```

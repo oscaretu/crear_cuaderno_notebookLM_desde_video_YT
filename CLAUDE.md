@@ -48,6 +48,11 @@ python ver_cuaderno.py "NOTEBOOK_ID" --idioma en --debug
 python listar_cuadernos.py
 python listar_cuadernos.py --ordenar creacion --desc
 ./listar_cuadernos_como_JSON_ordenados_por_fecha.sh  # JSON output
+
+# Extract Firefox cookies for authentication (v1.0.0)
+python extraer_cookies_firefox.py                    # Default profile
+python extraer_cookies_firefox.py --listar-perfiles  # List profiles
+python extraer_cookies_firefox.py --perfil Susana    # Specific profile
 ```
 
 ## Architecture
@@ -63,6 +68,8 @@ python listar_cuadernos.py --ordenar creacion --desc
 - **ver_cuaderno.py** (Python v0.1.0): Views and manages artifacts of an existing notebook. Accepts a NotebookLM URL or notebook ID. Without artifact flags, only shows current state. With `--todo` or `--report`/`--audio`/etc., generates missing artifacts.
 
 - **crear_cuaderno.sh** (Bash v1.3.0): Uses `notebooklm` CLI. By default generates report and mind-map (no daily limits). Optional flags for rate-limited artifacts: `--audio`, `--video`, `--slides`, `--infographic`, `--quiz`, `--flashcards`, `--todo`.
+
+- **extraer_cookies_firefox.py** (v1.0.0): Extracts Google authentication cookies from Firefox and generates `storage_state.json` for notebooklm-py. Avoids need for `notebooklm login`. Supports WSL2, Windows, Linux, macOS (auto-detected). Firefox can remain open during extraction.
 
 ### Notebook Naming Convention
 
@@ -90,17 +97,33 @@ notebooklm skill install
 ```
 This enables Claude Code to use NotebookLM commands directly via `/notebooklm` or natural language requests like "create a podcast about X".
 
+## Authentication
+
+### Option 1: Standard login (opens browser)
+```bash
+notebooklm login
+```
+
+### Option 2: Extract cookies from Firefox (recommended for WSL2)
+If you have Firefox open with an active Google session, extract cookies without re-login:
+```bash
+python extraer_cookies_firefox.py                    # Uses default profile
+python extraer_cookies_firefox.py --listar-perfiles  # List available profiles
+python extraer_cookies_firefox.py --perfil Susana    # Use specific profile
+python extraer_cookies_firefox.py --dry-run          # Preview without writing
+```
+
+Works on: WSL2, Windows (PowerShell), Linux, macOS. Platform auto-detected.
+
+Verify authentication:
+```bash
+notebooklm auth check --test
+```
+
+### Credentials location
+Stored in `~/.notebooklm/storage_state.json`.
+
 ## WSL2 Notes
-
-**Credentials**: Stored in `~/.notebooklm/`. If authenticating from Windows PowerShell but running from WSL2:
-```bash
-cp /mnt/c/Users/$USER/.notebooklm/storage_state.json ~/.notebooklm/
-```
-
-Or use the helper script:
-```bash
-source zzz_asigna_ubicacion_fichero_configuracion.inc.sh
-```
 
 **Git push**: SSH connections may hang in WSL2. Use HTTPS instead:
 ```bash
