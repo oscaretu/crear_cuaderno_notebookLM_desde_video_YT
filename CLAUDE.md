@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-CLI tools to automate Google NotebookLM tasks: create notebooks from YouTube videos, generate artifacts (reports, audio, slides, etc.), and list notebooks.
+CLI tools to automate Google NotebookLM tasks: create notebooks from YouTube videos, generate artifacts (reports, audio, slides, etc.), and list notebooks. Now features rich terminal output.
 
 ## Setup
 
@@ -26,7 +26,7 @@ sudo apt install jq  # Linux/WSL
 # Create notebook from YouTube video (Python v0.7.0)
 python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
 python main.py "URL" --todo                 # All artifacts
-python main.py "URL" --audio --slides       # Specific artifacts
+python main.py "URL" --audio --slides --quiz     # Specific artifacts
 python main.py "URL" --mostrar-descripcion  # Show video description
 python main.py "URL" --idioma en --debug
 
@@ -40,7 +40,7 @@ python main.py "URL" --idioma en --debug
 python ver_cuaderno.py "NOTEBOOK_ID"                  # View artifacts
 python ver_cuaderno.py "https://notebooklm.google.com/notebook/ID"
 python ver_cuaderno.py "NOTEBOOK_ID" --todo           # Generate missing artifacts
-python ver_cuaderno.py "NOTEBOOK_ID" --audio --slides # Specific artifacts
+python ver_cuaderno.py "NOTEBOOK_ID" --audio --slides --quiz # Specific artifacts
 python ver_cuaderno.py "NOTEBOOK_ID" --mostrar-informe
 python ver_cuaderno.py "NOTEBOOK_ID" --idioma en --debug
 
@@ -59,7 +59,7 @@ python extraer_cookies_firefox.py --perfil Susana    # Specific profile
 
 ### Shared Module
 
-- **common.py**: Shared functions and constants used by `main.py` and `ver_cuaderno.py`. Contains: `debug()`, `set_debug()`, `timestamp()`, artifact constants (`TIPOS_ARTEFACTOS`, `ORDEN_ARTEFACTOS`), `verificar_artefactos_existentes()`, `generar_artefactos()`, `mostrar_informe()`, `mostrar_estado_artefactos()`, `artefacto_tiene_idioma()`.
+- **common.py**: Shared functions and constants used by `main.py` and `ver_cuaderno.py`. Uses `rich` library for visual output (`Console`, `Table`, `Progress`). Contains: `debug()`, `set_debug()`, `timestamp()`, artifact constants, `verificar_artefactos_existentes()`, `generar_artefactos()` (with progress bars), `mostrar_informe()`.
 
 ### Scripts
 

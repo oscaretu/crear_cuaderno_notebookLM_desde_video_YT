@@ -13,9 +13,14 @@ Opciones generales:
 
 Opciones de artefactos:
     --report               Generar informe (sin límite)
-    --audio                Generar resumen de audio (límite diario)
+    --mind-map             Generar mapa mental (sin límite)
+    --data-table           Generar tabla de datos (sin límite)
     --slides               Generar presentación (límite diario)
     --infographic          Generar infografía (límite diario)
+    --quiz                 Generar cuestionario (límite diario)
+    --flashcards           Generar tarjetas didácticas (límite diario)
+    --audio                Generar resumen de audio (límite diario)
+    --video                Generar video (límite diario)
     --todo                 Generar todos los artefactos
 
 Por defecto solo genera el informe (sin límite diario).
@@ -50,6 +55,7 @@ from common import (
     generar_artefactos,
     mostrar_informe,
     mostrar_estado_artefactos,
+    console,
 )
 
 # Versión del programa
@@ -191,31 +197,31 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
     debug("PASO 1: Validar URL y extraer video_id")
     video_id = extraer_video_id(url)
     if not video_id:
-        print(f"Error: URL no válida de YouTube: {url}")
+        console.print(f"[bold red]Error: URL no válida de YouTube: {url}[/bold red]")
         debug(f"  Fallo: no se pudo extraer video_id de {url}")
         return False
 
-    print(f"Video ID: {video_id}")
-    print(f"Idioma para contenido: {idioma}")
+    console.print(f"Video ID: [bold]{video_id}[/bold]")
+    console.print(f"Idioma para contenido: [bold]{idioma}[/bold]")
     debug(f"  video_id extraído: {video_id}")
 
     # 2. Obtener metadatos del vídeo
     debug("PASO 2: Obtener metadatos del vídeo con yt-dlp")
-    print("Obteniendo metadatos del vídeo...")
+    console.print("[cyan]Obteniendo metadatos del vídeo...[/cyan]")
     try:
         metadatos = obtener_metadatos_video(url)
-        print(f"  Título: {metadatos['titulo']}")
-        print(f"  Canal: {metadatos['canal']}")
-        print(f"  Fecha: {metadatos['fecha']}")
+        console.print(f"  Título: [bold]{metadatos['titulo']}[/bold]")
+        console.print(f"  Canal: [dim]{metadatos['canal']}[/dim]")
+        console.print(f"  Fecha: [dim]{metadatos['fecha']}[/dim]")
         debug(f"  Metadatos obtenidos correctamente")
 
         # Mostrar descripción si se solicita
         if mostrar_descripcion and metadatos.get('descripcion'):
-            print("\n" + "="*60)
-            print("DESCRIPCIÓN DEL VÍDEO")
-            print("="*60)
-            print(metadatos['descripcion'])
-            print("="*60 + "\n")
+            console.print("\n" + "="*60, style="dim")
+            console.print("[bold]DESCRIPCIÓN DEL VÍDEO[/bold]")
+            console.print("="*60, style="dim")
+            console.print(metadatos['descripcion'])
+            console.print("="*60 + "\n", style="dim")
     except Exception as e:
         print(f"Error obteniendo metadatos: {e}")
         debug(f"  Excepción en metadatos: {type(e).__name__}: {e}")
@@ -237,9 +243,9 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
 
         if notebook:
             debug("  Cuaderno encontrado, procesando como existente")
-            print(f"✓ Cuaderno ya existe: {notebook.title}")
-            print(f"  ID: {notebook.id}")
-            print(f"  URL: https://notebooklm.google.com/notebook/{notebook.id}")
+            console.print(f"[bold green]✓ Cuaderno ya existe:[/bold green] {notebook.title}")
+            console.print(f"  ID: {notebook.id}")
+            console.print(f"  URL: https://notebooklm.google.com/notebook/{notebook.id}")
 
             # Verificar artefactos existentes (considerando idioma)
             debug("PASO 4.1: Verificar artefactos existentes")
@@ -264,7 +270,7 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
                 # Hay faltantes pero no se solicitaron
                 print(f"\n  No se generaron artefactos (no solicitados)")
             else:
-                print("\n✓ Todos los artefactos ya están disponibles")
+                console.print("\n[green]✓ Todos los artefactos ya están disponibles[/green]")
 
             # Mostrar sugerencias para artefactos faltantes no solicitados
             faltantes_no_solicitados = [t for t in faltantes if t not in artefactos_solicitados]
@@ -285,24 +291,26 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
             return True
 
         # 5. Crear nuevo cuaderno
+        # 5. Crear nuevo cuaderno
         debug("PASO 5: Crear nuevo cuaderno")
-        print(f"Creando cuaderno: {nombre_cuaderno}")
+        console.print(f"Creando cuaderno: [bold]{nombre_cuaderno}[/bold]")
         notebook = await client.notebooks.create(nombre_cuaderno)
         notebook_url = f"https://notebooklm.google.com/notebook/{notebook.id}"
-        print(f"✓ Cuaderno creado (ID: {notebook.id})")
-        print(f"  URL: {notebook_url}")
+        console.print(f"[bold green]✓ Cuaderno creado[/bold green] (ID: {notebook.id})")
+        console.print(f"  URL: {notebook_url}")
         debug(f"  Cuaderno creado con ID: {notebook.id}")
 
         # 6. Añadir vídeo como fuente y esperar a que esté lista
         debug("PASO 6: Añadir vídeo como fuente")
-        print(f"Añadiendo vídeo como fuente: {url}")
-        print(f"Esperando a que se procese (máx. {timeout_fuente}s)...")
+        console.print(f"Añadiendo vídeo como fuente: [underline]{url}[/underline]")
+        
         try:
-            await client.sources.add_url(notebook.id, url, wait=True, wait_timeout=timeout_fuente)
-            print("✓ Fuente añadida y procesada")
+            with console.status(f"Procesando fuente (máx. {timeout_fuente}s)...", spinner="earth"):
+                await client.sources.add_url(notebook.id, url, wait=True, wait_timeout=timeout_fuente)
+            console.print("[bold green]✓ Fuente añadida y procesada[/bold green]")
             debug("  Fuente añadida y lista")
         except Exception as e:
-            print(f"✓ Fuente añadida (aviso al esperar: {e})")
+            console.print(f"[yellow]✓ Fuente añadida (aviso al esperar: {e})[/yellow]")
             debug(f"  Fuente añadida pero error en espera: {e}")
 
         # 7. Generar artefactos solicitados
@@ -372,12 +380,22 @@ Por defecto solo genera el informe (sin límite). Use --todo para todos.
         'Por defecto solo genera el informe (sin límite diario)')
     artefactos_group.add_argument('--report', action='store_true',
                         help='Generar informe (sin límite)')
-    artefactos_group.add_argument('--audio', action='store_true',
-                        help='Generar resumen de audio (⚠ límite diario)')
+    artefactos_group.add_argument('--mind-map', action='store_true',
+                        help='Generar mapa mental (sin límite)')
+    artefactos_group.add_argument('--data-table', action='store_true',
+                        help='Generar tabla de datos (sin límite)')
     artefactos_group.add_argument('--slides', action='store_true',
                         help='Generar presentación (⚠ límite diario)')
     artefactos_group.add_argument('--infographic', action='store_true',
                         help='Generar infografía (⚠ límite diario)')
+    artefactos_group.add_argument('--quiz', action='store_true',
+                        help='Generar cuestionario (⚠ límite diario)')
+    artefactos_group.add_argument('--flashcards', action='store_true',
+                        help='Generar tarjetas didácticas (⚠ límite diario)')
+    artefactos_group.add_argument('--audio', action='store_true',
+                        help='Generar resumen de audio (⚠ límite diario)')
+    artefactos_group.add_argument('--video', action='store_true',
+                        help='Generar video (⚠ límite diario)')
     artefactos_group.add_argument('--todo', action='store_true',
                         help='Generar todos los artefactos')
 
@@ -407,12 +425,22 @@ Por defecto solo genera el informe (sin límite). Use --todo para todos.
     else:
         if args.report:
             artefactos_solicitados.add('report')
-        if args.audio:
-            artefactos_solicitados.add('audio')
+        if args.mind_map:
+            artefactos_solicitados.add('mind_map')
+        if args.data_table:
+            artefactos_solicitados.add('data_table')
         if args.slides:
             artefactos_solicitados.add('slides')
         if args.infographic:
             artefactos_solicitados.add('infographic')
+        if args.quiz:
+            artefactos_solicitados.add('quiz')
+        if args.flashcards:
+            artefactos_solicitados.add('flashcards')
+        if args.audio:
+            artefactos_solicitados.add('audio')
+        if args.video:
+            artefactos_solicitados.add('video')
 
         # Si no se especificó ninguno, usar solo report (sin límite)
         if not artefactos_solicitados:

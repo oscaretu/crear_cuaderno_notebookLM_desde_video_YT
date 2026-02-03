@@ -9,6 +9,13 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+from rich.console import Console
+from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
+from rich import box
+
+# Inicializar consola global
+console = Console()
 
 # Variable global para modo debug
 DEBUG = False
@@ -28,24 +35,28 @@ def timestamp() -> str:
 def debug(mensaje: str):
     """Imprime mensaje de debug si el modo está activo."""
     if DEBUG:
-        print(f"[DEBUG] {mensaje}")
+        console.print(f"[dim yellow][DEBUG] {mensaje}[/dim yellow]")
 
 
 # Mapeo de tipos de artefactos (ordenados: sin límite primero, luego por tiempo)
 # Formato: (nombre_display, tiene_limite_diario)
-# report: sin límite, 5-15 min
-# slides: con límite, tiempo medio
-# infographic: con límite, tiempo medio (comparte cuota con slides)
-# audio: con límite, 10-20 min (penúltimo)
+# Sin límite: report, mind_map, data_table
+# Con límite: slides, infographic (comparten cuota), quiz, flashcards, audio, video
 TIPOS_ARTEFACTOS = {
     'report': ('Informe', False),
+    'mind_map': ('Mapa Mental', False),
+    'data_table': ('Tabla de Datos', False),
     'slides': ('Presentación (Slides)', True),
     'infographic': ('Infografía', True),
+    'quiz': ('Cuestionario', True),
+    'flashcards': ('Tarjetas Didácticas', True),
     'audio': ('Resumen de Audio', True),
+    'video': ('Video', True),
 }
 
 # Lista ordenada de tipos (el orden importa para generación)
-ORDEN_ARTEFACTOS = ['report', 'slides', 'infographic', 'audio']
+# Sin límite primero, luego con límite (video último por ser el más lento)
+ORDEN_ARTEFACTOS = ['report', 'mind_map', 'data_table', 'slides', 'infographic', 'quiz', 'flashcards', 'audio', 'video']
 
 
 def artefacto_tiene_idioma(artefacto, idioma: str) -> bool:
@@ -70,78 +81,124 @@ async def verificar_artefactos_existentes(client, notebook_id: str, idioma: str 
     debug(f"Verificando artefactos en notebook: {notebook_id} (idioma: {idioma})")
     existentes = {
         'report': [],
-        'audio': [],
+        'mind_map': [],
+        'data_table': [],
         'slides': [],
         'infographic': [],
+        'quiz': [],
+        'flashcards': [],
+        'audio': [],
+        'video': [],
     }
 
     try:
-        # Listar cada tipo de artefacto
-        debug("  Buscando reports...")
-        try:
-            reports = await client.artifacts.list_reports(notebook_id)
-            debug(f"    Reports encontrados: {len(reports) if reports else 0}")
-            if reports:
-                # Buscar todos los que coincidan con el idioma
-                for report in reports:
-                    if artefacto_tiene_idioma(report, idioma):
-                        existentes['report'].append(report)
-                        debug(f"    Report en idioma {idioma} encontrado")
-                debug(f"    Reports en idioma {idioma}: {len(existentes['report'])}")
-        except Exception as e:
-            debug(f"    Error listando reports: {e}")
+        # Listar cada tipo de artefacto (con spinner visual si no hay barra de progreso externa)
+        with console.status(f"[bold green]Verificando artefactos existentes ({idioma})...", spinner="dots"):
+            debug("  Buscando reports...")
+            try:
+                reports = await client.artifacts.list_reports(notebook_id)
+                debug(f"    Reports encontrados: {len(reports) if reports else 0}")
+                if reports:
+                    for report in reports:
+                        if artefacto_tiene_idioma(report, idioma):
+                            existentes['report'].append(report)
+            except Exception as e:
+                debug(f"    Error listando reports: {e}")
 
-        debug("  Buscando audios...")
-        try:
-            audios = await client.artifacts.list_audio(notebook_id)
-            debug(f"    Audios encontrados: {len(audios) if audios else 0}")
-            if audios:
-                for audio in audios:
-                    if artefacto_tiene_idioma(audio, idioma):
-                        existentes['audio'].append(audio)
-                        debug(f"    Audio en idioma {idioma} encontrado")
-                debug(f"    Audios en idioma {idioma}: {len(existentes['audio'])}")
-        except Exception as e:
-            debug(f"    Error listando audios: {e}")
+            debug("  Buscando audios...")
+            try:
+                audios = await client.artifacts.list_audio(notebook_id)
+                debug(f"    Audios encontrados: {len(audios) if audios else 0}")
+                if audios:
+                    for audio in audios:
+                        if artefacto_tiene_idioma(audio, idioma):
+                            existentes['audio'].append(audio)
+            except Exception as e:
+                debug(f"    Error listando audios: {e}")
 
-        debug("  Buscando slides...")
-        try:
-            slides = await client.artifacts.list_slide_decks(notebook_id)
-            debug(f"    Slides encontrados: {len(slides) if slides else 0}")
-            if slides:
-                # Slides no tienen idioma, guardar todos
-                existentes['slides'] = list(slides)
-        except Exception as e:
-            debug(f"    Error listando slides: {e}")
+            debug("  Buscando slides...")
+            try:
+                slides = await client.artifacts.list_slide_decks(notebook_id)
+                debug(f"    Slides encontrados: {len(slides) if slides else 0}")
+                if slides:
+                    existentes['slides'] = list(slides)
+            except Exception as e:
+                debug(f"    Error listando slides: {e}")
 
-        debug("  Buscando infographics...")
-        try:
-            infographics = await client.artifacts.list_infographics(notebook_id)
-            debug(f"    Infographics encontrados: {len(infographics) if infographics else 0}")
-            if infographics:
-                # Infographics no tienen idioma, guardar todos
-                existentes['infographic'] = list(infographics)
-        except Exception as e:
-            debug(f"    Error listando infographics: {e}")
+            debug("  Buscando infographics...")
+            try:
+                infographics = await client.artifacts.list_infographics(notebook_id)
+                debug(f"    Infographics encontrados: {len(infographics) if infographics else 0}")
+                if infographics:
+                    existentes['infographic'] = list(infographics)
+            except Exception as e:
+                debug(f"    Error listando infographics: {e}")
+
+            debug("  Buscando videos...")
+            try:
+                videos = await client.artifacts.list_video(notebook_id)
+                debug(f"    Videos encontrados: {len(videos) if videos else 0}")
+                if videos:
+                    existentes['video'] = list(videos)
+            except Exception as e:
+                debug(f"    Error listando videos: {e}")
+
+            debug("  Buscando mind_maps...")
+            try:
+                # Mind maps usan el método list() con tipo 5
+                mind_maps = await client.artifacts.list(notebook_id, 5)
+                debug(f"    Mind maps encontrados: {len(mind_maps) if mind_maps else 0}")
+                if mind_maps:
+                    existentes['mind_map'] = list(mind_maps)
+            except Exception as e:
+                debug(f"    Error listando mind_maps: {e}")
+
+            debug("  Buscando data_tables...")
+            try:
+                data_tables = await client.artifacts.list_data_tables(notebook_id)
+                debug(f"    Data tables encontrados: {len(data_tables) if data_tables else 0}")
+                if data_tables:
+                    existentes['data_table'] = list(data_tables)
+            except Exception as e:
+                debug(f"    Error listando data_tables: {e}")
+
+            debug("  Buscando quizzes...")
+            try:
+                quizzes = await client.artifacts.list_quizzes(notebook_id)
+                debug(f"    Quizzes encontrados: {len(quizzes) if quizzes else 0}")
+                if quizzes:
+                    existentes['quiz'] = list(quizzes)
+            except Exception as e:
+                debug(f"    Error listando quizzes: {e}")
+
+            debug("  Buscando flashcards...")
+            try:
+                flashcards = await client.artifacts.list_flashcards(notebook_id)
+                debug(f"    Flashcards encontrados: {len(flashcards) if flashcards else 0}")
+                if flashcards:
+                    existentes['flashcards'] = list(flashcards)
+            except Exception as e:
+                debug(f"    Error listando flashcards: {e}")
 
     except Exception as e:
-        print(f"  Advertencia al verificar artefactos: {e}")
+        console.print(f"[bold red]⚠ Error al verificar artefactos: {e}[/bold red]")
         debug(f"  Excepción general: {e}")
 
-    debug(f"Resumen artefactos: report={len(existentes['report'])}, audio={len(existentes['audio'])}, slides={len(existentes['slides'])}, infographic={len(existentes['infographic'])}")
+    resumen = ", ".join(f"{k}={len(v)}" for k, v in existentes.items())
+    debug(f"Resumen artefactos: {resumen}")
     return existentes
 
 
 async def generar_artefactos(client, notebook_id: str, faltantes: list[str], idioma: str = 'es', retardo_entre_tareas: float = 3.0) -> int:
     """Genera los artefactos especificados en paralelo con retardo escalonado.
-
+    
     Args:
         client: Cliente de NotebookLM
         notebook_id: ID del cuaderno
         faltantes: Lista de tipos de artefactos a generar
         idioma: Código de idioma para los artefactos
         retardo_entre_tareas: Segundos de retardo entre el inicio de cada tarea
-
+        
     Returns:
         Cantidad de artefactos generados exitosamente.
     """
@@ -151,91 +208,107 @@ async def generar_artefactos(client, notebook_id: str, faltantes: list[str], idi
         debug("No hay artefactos faltantes, retornando 0")
         return 0
 
-    async def generar_y_reportar(nombre: str, tipo: str, generar_func, **kwargs):
-        """Lanza generación y reporta cuando completa.
-
-        Returns:
-            Tuple (éxito: bool, limite_alcanzado: bool)
-        """
-        hora_inicio = timestamp()
-        debug(f"  Iniciando generación de {nombre} con kwargs: {kwargs}")
-        print(f"  [{hora_inicio}] → Iniciando: {nombre}")
-        try:
-            status = await generar_func(notebook_id, **kwargs)
-            debug(f"    Status recibido: {status}")
-
-            # Verificar si la generación falló inmediatamente
-            if status and getattr(status, 'status', None) == 'failed':
-                hora_fin = timestamp()
-
-                # Verificar si es un error de límite de cuota
-                if hasattr(status, 'is_rate_limited') and status.is_rate_limited:
-                    print(f"  [{hora_fin}] ⚠ {nombre}: Límite diario alcanzado")
-                    print(f"           Espera al día siguiente o suscríbete a NotebookLM Plus")
-                    debug(f"    {nombre} rechazado por límite de cuota")
-                    return (False, True)  # (no éxito, límite alcanzado)
-
-                error_msg = getattr(status, 'error', 'Error desconocido')
-                print(f"  [{hora_fin}] ✗ Rechazado: {nombre} - {error_msg}")
-                debug(f"    {nombre} rechazado por la API")
-                return (False, False)
-
-            # Esperar completado si tenemos un task_id válido
-            if status and getattr(status, 'task_id', None):
-                debug(f"    Esperando completado de task_id: {status.task_id}")
-                await client.artifacts.wait_for_completion(notebook_id, status.task_id)
-            hora_fin = timestamp()
-            print(f"  [{hora_fin}] ✓ Completado: {nombre}")
-            debug(f"    {nombre} completado exitosamente")
-            return (True, False)
-        except Exception as e:
-            hora_fin = timestamp()
-            print(f"  [{hora_fin}] ✗ Error en {nombre}: {e}")
-            debug(f"    Excepción en {nombre}: {type(e).__name__}: {e}")
-            return (False, False)
-
-    # Artefactos que comparten cuota (si uno falla por límite, saltar los demás del grupo)
+    # Configuración de artefactos y cuotas
+    # slides e infographic comparten cuota 'premium'
     CUOTA_COMPARTIDA = {
-        'slides': 'premium',      # slides e infographic comparten cuota premium
-        'infographic': 'premium',
+        'slides': 'premium', 'infographic': 'premium',
     }
+    # Artefactos que no devuelven GenerationStatus (no usan wait_for_completion)
+    ARTEFACTOS_SINCRONOS = {'mind_map'}
 
-    # Definir configuración de cada tipo de artefacto (mismo orden que TIPOS_ARTEFACTOS)
     CONFIG_ARTEFACTOS = {
         'report': ('Informe', client.artifacts.generate_report, {'language': idioma}),
+        'mind_map': ('Mapa Mental', client.artifacts.generate_mind_map, {}),  # No acepta language
+        'data_table': ('Tabla de Datos', client.artifacts.generate_data_table, {'language': idioma}),
         'slides': ('Presentación (Slides)', client.artifacts.generate_slide_deck, {'language': idioma}),
         'infographic': ('Infografía', client.artifacts.generate_infographic, {'language': idioma}),
+        'quiz': ('Cuestionario', client.artifacts.generate_quiz, {}),  # No acepta language
+        'flashcards': ('Tarjetas Didácticas', client.artifacts.generate_flashcards, {}),  # No acepta language
         'audio': ('Resumen de Audio', client.artifacts.generate_audio, {'language': idioma}),
+        'video': ('Video', client.artifacts.generate_video, {'language': idioma}),
     }
 
-    print(f"\nGenerando artefactos (idioma: {idioma}, retardo entre inicios: {retardo_entre_tareas}s)...")
-
     exitosos = 0
-    cuotas_agotadas = set()  # Grupos de cuota que han alcanzado el límite
+    cuotas_agotadas = set()
+    
+    console.print(f"\n[bold cyan]Iniciando generación de {len(faltantes)} artefactos...[/bold cyan]")
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+        console=console
+    ) as progress:
+        
+        task_total = progress.add_task("[bold]Progreso General", total=len(faltantes))
+        
+        for i, tipo in enumerate(faltantes):
+            nombre_display, generar_func, kwargs = CONFIG_ARTEFACTOS[tipo]
+            grupo_cuota = CUOTA_COMPARTIDA.get(tipo)
+            
+            # Verificar cuota compartida antes de empezar
+            if grupo_cuota and grupo_cuota in cuotas_agotadas:
+                console.print(f"[yellow]⏭ {nombre_display}: Omitido (cuota '{grupo_cuota}' agotada)[/yellow]")
+                progress.advance(task_total)
+                continue
 
-    for i, tipo in enumerate(faltantes):
-        # Verificar si este tipo comparte cuota con uno ya agotado
-        grupo_cuota = CUOTA_COMPARTIDA.get(tipo)
-        if grupo_cuota and grupo_cuota in cuotas_agotadas:
-            nombre = CONFIG_ARTEFACTOS[tipo][0]
-            print(f"  [--:--:--] ⏭ {nombre}: Omitido (cuota compartida agotada)")
-            debug(f"    Saltando {tipo} porque cuota '{grupo_cuota}' está agotada")
-            continue
+            # Retardo entre tareas
+            if i > 0:
+                task_wait = progress.add_task(f"[dim]Esperando {retardo_entre_tareas}s...", total=retardo_entre_tareas)
+                # Simular espera visual
+                for _ in range(int(retardo_entre_tareas * 10)):
+                    await asyncio.sleep(0.1)
+                    progress.update(task_wait, advance=0.1)
+                progress.update(task_wait, visible=False) # Ocultar espera al terminar
 
-        # Aplicar retardo entre artefactos (excepto el primero)
-        if i > 0:
-            debug(f"  Esperando {retardo_entre_tareas}s antes de siguiente artefacto")
-            await asyncio.sleep(retardo_entre_tareas)
+            # Tarea actual
+            task_current = progress.add_task(f"Generando {nombre_display}...", total=None) # Indeterminado
+            
+            try:
+                debug(f"  Iniciando {nombre_display}")
+                resultado = await generar_func(notebook_id, **kwargs)
 
-        nombre, generar_func, kwargs = CONFIG_ARTEFACTOS[tipo]
-        exito, limite_alcanzado = await generar_y_reportar(nombre, tipo, generar_func, **kwargs)
+                # Artefactos síncronos (mind_map) devuelven dict, no GenerationStatus
+                if tipo in ARTEFACTOS_SINCRONOS:
+                    if resultado and resultado.get('mind_map'):
+                        console.print(f"[bold green]✓ Completado: {nombre_display}[/bold green]")
+                        exitosos += 1
+                    else:
+                        console.print(f"[red]✗ Error en {nombre_display}: No se pudo generar[/red]")
+                    progress.update(task_current, completed=100, visible=False)
+                    progress.advance(task_total)
+                    continue
 
-        if exito:
-            exitosos += 1
-        elif limite_alcanzado and grupo_cuota:
-            # Marcar el grupo de cuota como agotado
-            cuotas_agotadas.add(grupo_cuota)
-            debug(f"    Cuota '{grupo_cuota}' marcada como agotada")
+                # Check inmediato de error/cuota para artefactos asíncronos
+                if resultado and getattr(resultado, 'status', None) == 'failed':
+                    if hasattr(resultado, 'is_rate_limited') and resultado.is_rate_limited:
+                        console.print(f"[bold red]⚠ {nombre_display}: Límite diario alcanzado[/bold red]")
+                        cuotas_agotadas.add(grupo_cuota)
+                        progress.update(task_current, completed=0, visible=False)
+                    else:
+                        error_msg = getattr(resultado, 'error', 'Error desconocido')
+                        console.print(f"[red]✗ Error en {nombre_display}: {error_msg}[/red]")
+                        progress.update(task_current, completed=0, visible=False)
+                    progress.advance(task_total)
+                    continue
+
+                # Esperar completado
+                if resultado and getattr(resultado, 'task_id', None):
+                    progress.update(task_current, description=f"Procesando {nombre_display}...")
+                    await client.artifacts.wait_for_completion(notebook_id, resultado.task_id)
+
+                console.print(f"[bold green]✓ Completado: {nombre_display}[/bold green]")
+                exitosos += 1
+                progress.update(task_current, completed=100, visible=False)
+                
+            except Exception as e:
+                console.print(f"[bold red]✗ Excepción en {nombre_display}: {e}[/bold red]")
+                debug(f"Excepción: {e}")
+                progress.update(task_current, visible=False)
+            
+            progress.advance(task_total)
 
     return exitosos
 
@@ -243,56 +316,50 @@ async def generar_artefactos(client, notebook_id: str, faltantes: list[str], idi
 async def mostrar_informe(client, notebook_id: str):
     """Descarga y muestra el contenido del informe."""
     try:
-        # Crear archivo temporal para el informe
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
-            temp_path = f.name
+        with console.status("[bold green]Descargando informe...", spinner="dots"):
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+                temp_path = f.name
+            await client.artifacts.download_report(notebook_id, temp_path)
+            contenido = Path(temp_path).read_text(encoding='utf-8')
+            Path(temp_path).unlink(missing_ok=True)
 
-        # Descargar el informe
-        await client.artifacts.download_report(notebook_id, temp_path)
-
-        # Leer y mostrar el contenido
-        contenido = Path(temp_path).read_text(encoding='utf-8')
-
-        print("\n" + "="*60)
-        print("CONTENIDO DEL INFORME")
-        print("="*60)
-        print(contenido)
-        print("="*60)
-
-        # Limpiar archivo temporal
-        Path(temp_path).unlink(missing_ok=True)
+        console.print("\n[bold]CONTENIDO DEL INFORME[/bold]", style="underline")
+        console.print(contenido)
+        console.print("="*60)
 
     except Exception as e:
-        print(f"\n  ✗ Error al obtener el informe: {e}")
+        console.print(f"[bold red]✗ Error al obtener el informe: {e}[/bold red]")
 
 
 def mostrar_estado_artefactos(existentes: dict) -> tuple[list[str], list[str]]:
-    """Muestra el estado de los artefactos existentes y devuelve los faltantes.
-
-    Args:
-        existentes: Diccionario con listas de artefactos por tipo.
-
-    Returns:
-        Tupla (faltantes, faltantes_con_limite) con los tipos que no existen.
-    """
-    print("\nEstado de artefactos:")
+    """Muestra tabla de estado de artefactos y devuelve faltantes."""
     faltantes = []
     faltantes_con_limite = []
+
+    table = Table(title="Estado de Artefactos", box=box.ROUNDED)
+    table.add_column("Artefacto", style="cyan")
+    table.add_column("Estado", justify="center")
+    table.add_column("Detalle", style="dim")
+
     for tipo in ORDEN_ARTEFACTOS:
         nombre, tiene_limite = TIPOS_ARTEFACTOS[tipo]
         lista = existentes[tipo]
+        
         if lista:
-            total = len(lista)
-            for idx, artefacto in enumerate(lista, 1):
-                titulo = getattr(artefacto, 'title', None) or getattr(artefacto, 'id', 'disponible')
-                if total > 1:
-                    print(f"  ✓ {nombre} ({idx} de {total}): {titulo}")
-                else:
-                    print(f"  ✓ {nombre}: {titulo}")
+            status = "[bold green]Disponible[/bold green]"
+            detalles = []
+            for art in lista:
+                titulo = getattr(art, 'title', None) or getattr(art, 'id', 'ID')
+                detalles.append(titulo)
+            detalle_str = "\n".join(detalles)
         else:
-            limite_hint = " (⚠ límite diario)" if tiene_limite else ""
-            print(f"  ✗ {nombre}: no disponible{limite_hint}")
+            status = "[red]No disponible[/red]"
+            detalle_str = "⚠ Límite diario" if tiene_limite else "-"
             faltantes.append(tipo)
             if tiene_limite:
                 faltantes_con_limite.append(tipo)
+        
+        table.add_row(nombre, status, detalle_str)
+
+    console.print("\n", table)
     return faltantes, faltantes_con_limite

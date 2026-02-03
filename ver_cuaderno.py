@@ -15,9 +15,14 @@ Opciones generales:
 
 Opciones de artefactos (generar los que falten):
     --report               Generar informe (sin límite)
-    --audio                Generar resumen de audio (límite diario)
+    --mind-map             Generar mapa mental (sin límite)
+    --data-table           Generar tabla de datos (sin límite)
     --slides               Generar presentación (límite diario)
     --infographic          Generar infografía (límite diario)
+    --quiz                 Generar cuestionario (límite diario)
+    --flashcards           Generar tarjetas didácticas (límite diario)
+    --audio                Generar resumen de audio (límite diario)
+    --video                Generar video (límite diario)
     --todo                 Generar todos los artefactos que falten
 
 Ejemplo:
@@ -47,6 +52,7 @@ from common import (
     generar_artefactos,
     mostrar_informe,
     mostrar_estado_artefactos,
+    console,
 )
 
 # Versión del programa
@@ -96,7 +102,7 @@ async def procesar_cuaderno(notebook_id: str, mostrar_informe_flag: bool = False
 
     # 1. Conectar con NotebookLM
     debug("PASO 1: Conectar con NotebookLM")
-    print("Conectando con NotebookLM...")
+    console.print("Conectando con NotebookLM...")
     async with await NotebookLMClient.from_storage() as client:
         debug("  Conexión establecida con NotebookLM")
 
@@ -105,20 +111,20 @@ async def procesar_cuaderno(notebook_id: str, mostrar_informe_flag: bool = False
         notebook = await obtener_cuaderno(client, notebook_id)
 
         if not notebook:
-            print(f"Error: No se encontró el cuaderno con ID: {notebook_id}")
+            console.print(f"Error: No se encontró el cuaderno con ID: {notebook_id}")
             return False
 
         # 3. Mostrar información del cuaderno
-        print(f"Cuaderno: {notebook.title}")
-        print(f"  ID: {notebook.id}")
-        print(f"  URL: https://notebooklm.google.com/notebook/{notebook.id}")
+        console.print(f"Cuaderno: {notebook.title}")
+        console.print(f"  ID: {notebook.id}")
+        console.print(f"  URL: https://notebooklm.google.com/notebook/{notebook.id}")
         created = getattr(notebook, 'created_at', None) or getattr(notebook, 'create_time', None)
         if created:
-            print(f"  Creado: {created}")
+            console.print(f"  Creado: {created}")
 
         # 4. Verificar artefactos existentes
         debug("PASO 3: Verificar artefactos existentes")
-        print(f"\nVerificando artefactos (idioma: {idioma})...")
+        console.print(f"\nVerificando artefactos (idioma: {idioma})...")
         existentes = await verificar_artefactos_existentes(client, notebook.id, idioma)
 
         # 5. Mostrar estado de artefactos
@@ -129,17 +135,17 @@ async def procesar_cuaderno(notebook_id: str, mostrar_informe_flag: bool = False
             a_generar = [t for t in faltantes if t in artefactos_solicitados]
 
             if a_generar:
-                print(f"\nGenerando {len(a_generar)} artefacto(s)...")
+                console.print(f"\nGenerando {len(a_generar)} artefacto(s)...")
                 exitosos = await generar_artefactos(client, notebook.id, a_generar, idioma, retardo)
-                print(f"\n  Artefactos generados: {exitosos}/{len(a_generar)}")
+                console.print(f"\n  Artefactos generados: {exitosos}/{len(a_generar)}")
             elif faltantes:
                 # Hay faltantes pero ninguno coincide con los solicitados
                 ya_existentes = [t for t in artefactos_solicitados if t not in faltantes]
                 if ya_existentes:
                     nombres = [TIPOS_ARTEFACTOS[t][0] for t in ya_existentes]
-                    print(f"\n  Ya existen: {', '.join(nombres)}")
+                    console.print(f"\n  Ya existen: {', '.join(nombres)}")
             else:
-                print("\n✓ Todos los artefactos ya están disponibles")
+                console.print("\n✓ Todos los artefactos ya están disponibles")
 
         # 7. Mostrar sugerencias para artefactos faltantes
         faltantes_no_solicitados = [t for t in faltantes if not artefactos_solicitados or t not in artefactos_solicitados]
@@ -188,12 +194,22 @@ Sin flags de artefactos, solo muestra el estado actual del cuaderno.
         'Generar artefactos faltantes. Sin estos flags, solo se consulta el estado.')
     artefactos_group.add_argument('--report', action='store_true',
                         help='Generar informe (sin límite)')
-    artefactos_group.add_argument('--audio', action='store_true',
-                        help='Generar resumen de audio (⚠ límite diario)')
+    artefactos_group.add_argument('--mind-map', action='store_true',
+                        help='Generar mapa mental (sin límite)')
+    artefactos_group.add_argument('--data-table', action='store_true',
+                        help='Generar tabla de datos (sin límite)')
     artefactos_group.add_argument('--slides', action='store_true',
                         help='Generar presentación (⚠ límite diario)')
     artefactos_group.add_argument('--infographic', action='store_true',
                         help='Generar infografía (⚠ límite diario)')
+    artefactos_group.add_argument('--quiz', action='store_true',
+                        help='Generar cuestionario (⚠ límite diario)')
+    artefactos_group.add_argument('--flashcards', action='store_true',
+                        help='Generar tarjetas didácticas (⚠ límite diario)')
+    artefactos_group.add_argument('--audio', action='store_true',
+                        help='Generar resumen de audio (⚠ límite diario)')
+    artefactos_group.add_argument('--video', action='store_true',
+                        help='Generar video (⚠ límite diario)')
     artefactos_group.add_argument('--todo', action='store_true',
                         help='Generar todos los artefactos que falten')
 
@@ -202,7 +218,7 @@ Sin flags de artefactos, solo muestra el estado actual del cuaderno.
 
     args = parser.parse_args()
 
-    print(f"NotebookLM Notebook Viewer v{VERSION}")
+    console.print(f"[bold]NotebookLM Notebook Viewer v{VERSION}[/bold]")
 
     # Activar modo debug
     if args.debug:
@@ -215,7 +231,7 @@ Sin flags de artefactos, solo muestra el estado actual del cuaderno.
 
     # Mostrar recordatorio de idioma por defecto
     if args.idioma == 'es':
-        print("Nota: Usando idioma español por defecto. Usa --idioma para cambiar (ej: --idioma en)")
+        console.print("[dim]Nota: Usando idioma español por defecto. Usa --idioma para cambiar (ej: --idioma en)[/dim]")
 
     # Determinar artefactos a generar
     artefactos_solicitados = None
@@ -225,12 +241,22 @@ Sin flags de artefactos, solo muestra el estado actual del cuaderno.
         solicitados = set()
         if args.report:
             solicitados.add('report')
-        if args.audio:
-            solicitados.add('audio')
+        if args.mind_map:
+            solicitados.add('mind_map')
+        if args.data_table:
+            solicitados.add('data_table')
         if args.slides:
             solicitados.add('slides')
         if args.infographic:
             solicitados.add('infographic')
+        if args.quiz:
+            solicitados.add('quiz')
+        if args.flashcards:
+            solicitados.add('flashcards')
+        if args.audio:
+            solicitados.add('audio')
+        if args.video:
+            solicitados.add('video')
         if solicitados:
             artefactos_solicitados = solicitados
 
@@ -239,11 +265,11 @@ Sin flags de artefactos, solo muestra el estado actual del cuaderno.
         sin_limite = [t for t in artefactos_solicitados if not TIPOS_ARTEFACTOS[t][1]]
         con_limite = [t for t in artefactos_solicitados if TIPOS_ARTEFACTOS[t][1]]
         if sin_limite:
-            print(f"Artefactos sin límite a generar: {', '.join(sin_limite)}")
+            console.print(f"Artefactos sin límite a generar: {', '.join(sin_limite)}")
         if con_limite:
-            print(f"Artefactos con límite a generar: {', '.join(con_limite)} (pueden fallar si se alcanzó el límite diario)")
+            console.print(f"[yellow]Artefactos con límite a generar: {', '.join(con_limite)} (pueden fallar si se alcanzó el límite diario)[/yellow]")
     else:
-        print("Modo consulta: mostrando estado del cuaderno")
+        console.print("[dim]Modo consulta: mostrando estado del cuaderno[/dim]")
 
     try:
         asyncio.run(procesar_cuaderno(
@@ -254,9 +280,9 @@ Sin flags de artefactos, solo muestra el estado actual del cuaderno.
             artefactos_solicitados
         ))
     except Exception as e:
-        print(f"\nError: {e}")
+        console.print(f"\n[bold red]Error: {e}[/bold red]")
         debug(f"Excepción en main: {type(e).__name__}: {e}")
-        print("\n¿Has ejecutado 'notebooklm login' para autenticarte?")
+        console.print("\n¿Has ejecutado 'notebooklm login' para autenticarte?")
         sys.exit(1)
 
 
