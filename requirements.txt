@@ -1,2 +1,3 @@
 notebooklm-py[browser]
 yt-dlp
+rich

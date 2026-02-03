@@ -11,6 +11,11 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
+Las dependencias principales son:
+- `notebooklm-py`: API cliente no oficial de NotebookLM
+- `yt-dlp`: Extracción de metadatos de YouTube
+- `rich`: Interfaz de línea de comandos visual (tablas, barras de progreso)
+
 Para el script Bash también necesitas:
 ```bash
 # jq para parsear JSON
@@ -60,6 +65,14 @@ notebooklm auth check --test
 Las credenciales se guardan en `~/.notebooklm/storage_state.json`.
 
 ---
+
+## Características Visuales (Nuevo)
+
+Los scripts Python ahora utilizan la librería **Rich** para ofrecer una mejor experiencia de usuario:
+- **Tablas formateadas**: Estado de artefactos claro y legible.
+- **Barras de progreso**: Visualización en tiempo real de la generación de artefactos.
+- **Spinners**: Indicadores visuales para operaciones de espera (conexión, descargas).
+- **Colores**: Mensajes de éxito (verde), error (rojo) y advertencia (amarillo) fácilmente distinguibles.
 
 ## Herramientas disponibles
 
@@ -138,8 +151,8 @@ python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
 # Todos los artefactos
 python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --todo
 
-# Solo audio y slides
-python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --audio --slides
+# Solo audio, slides y quiz
+python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --audio --slides --quiz
 
 # Ver descripción del vídeo
 python main.py "https://www.youtube.com/watch?v=VIDEO_ID" --mostrar-descripcion
@@ -212,8 +225,8 @@ python ver_cuaderno.py "NOTEBOOK_ID"
 # Generar todos los artefactos que falten
 python ver_cuaderno.py "NOTEBOOK_ID" --todo
 
-# Generar solo audio y slides
-python ver_cuaderno.py "NOTEBOOK_ID" --audio --slides
+# Generar solo audio, slides y quiz
+python ver_cuaderno.py "NOTEBOOK_ID" --audio --slides --quiz
 
 # Ver contenido del informe
 python ver_cuaderno.py "NOTEBOOK_ID" --mostrar-informe
