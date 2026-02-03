@@ -23,7 +23,7 @@ sudo apt install jq  # Linux/WSL
 ## Key Commands
 
 ```bash
-# Create notebook from YouTube video (Python v0.7.0)
+# Create notebook from YouTube video (Python v0.8.0)
 python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
 python main.py "URL" --todo                 # All artifacts
 python main.py "URL" --audio --slides --quiz     # Specific artifacts
@@ -63,7 +63,7 @@ python extraer_cookies_firefox.py --perfil Susana    # Specific profile
 
 ### Scripts
 
-- **main.py** (Python v0.7.0): Creates notebooks from YouTube videos. Uses `notebooklm` Python API with asyncio. By default only generates report (no daily limit). Use `--todo` for all artifacts. Has smart quota handling (detects rate limits via `is_rate_limited`, skips related artifacts). Artifacts ordered by: no-limit first, then by generation time.
+- **main.py** (Python v0.8.0): Creates notebooks from YouTube videos. Uses `notebooklm` Python API with asyncio. By default generates: report, mind_map, data_table, quiz, flashcards. Use `--todo` for all artifacts. Has smart quota handling (detects rate limits via `is_rate_limited`, skips related artifacts). Artifacts ordered by: no-limit first, then by generation time.
 
 - **ver_cuaderno.py** (Python v0.1.0): Views and manages artifacts of an existing notebook. Accepts a NotebookLM URL or notebook ID. Without artifact flags, only shows current state. With `--todo` or `--report`/`--audio`/etc., generates missing artifacts.
 

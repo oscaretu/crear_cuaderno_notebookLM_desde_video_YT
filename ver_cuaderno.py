@@ -125,10 +125,10 @@ async def procesar_cuaderno(notebook_id: str, mostrar_informe_flag: bool = False
         # 4. Verificar artefactos existentes
         debug("PASO 3: Verificar artefactos existentes")
         console.print(f"\nVerificando artefactos (idioma: {idioma})...")
-        existentes = await verificar_artefactos_existentes(client, notebook.id, idioma)
+        existentes, urls = await verificar_artefactos_existentes(client, notebook.id, idioma)
 
         # 5. Mostrar estado de artefactos
-        faltantes, faltantes_con_limite = mostrar_estado_artefactos(existentes)
+        faltantes, faltantes_con_limite = mostrar_estado_artefactos(existentes, urls, notebook.id)
 
         # 6. Generar artefactos si se solicitaron
         if artefactos_solicitados:

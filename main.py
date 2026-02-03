@@ -23,7 +23,7 @@ Opciones de artefactos:
     --video                Generar video (límite diario)
     --todo                 Generar todos los artefactos
 
-Por defecto solo genera el informe (sin límite diario).
+Por defecto genera: informe, mapa mental, tabla de datos, cuestionario y tarjetas.
 
 Ejemplo:
     python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
@@ -59,7 +59,7 @@ from common import (
 )
 
 # Versión del programa
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 
 
 def extraer_video_id(url: str) -> str | None:
@@ -181,9 +181,9 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
         mostrar_descripcion: Si True, muestra la descripción del vídeo
         artefactos_solicitados: Conjunto de tipos de artefactos a generar
     """
-    # Por defecto, solo artefactos sin límite (report)
+    # Por defecto: informe, mapa mental, tabla de datos, cuestionario y tarjetas
     if artefactos_solicitados is None:
-        artefactos_solicitados = {'report'}
+        artefactos_solicitados = {'report', 'mind_map', 'data_table', 'quiz', 'flashcards'}
     debug("="*60)
     debug("INICIO procesar_video()")
     debug(f"  URL: {url}")
@@ -250,10 +250,10 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
             # Verificar artefactos existentes (considerando idioma)
             debug("PASO 4.1: Verificar artefactos existentes")
             print(f"\nVerificando artefactos existentes (idioma: {idioma})...")
-            existentes = await verificar_artefactos_existentes(client, notebook.id, idioma)
+            existentes, urls = await verificar_artefactos_existentes(client, notebook.id, idioma)
 
             # Mostrar estado de cada artefacto
-            faltantes, faltantes_con_limite = mostrar_estado_artefactos(existentes)
+            faltantes, faltantes_con_limite = mostrar_estado_artefactos(existentes, urls, notebook.id)
 
             # Determinar qué artefactos generar según las opciones
             a_generar = []
@@ -442,10 +442,10 @@ Por defecto solo genera el informe (sin límite). Use --todo para todos.
         if args.video:
             artefactos_solicitados.add('video')
 
-        # Si no se especificó ninguno, usar solo report (sin límite)
+        # Si no se especificó ninguno, usar conjunto por defecto
         if not artefactos_solicitados:
-            artefactos_solicitados = {'report'}
-            print("Nota: Por defecto solo se genera el informe. Usa --todo para todos, o --audio/--slides/etc.")
+            artefactos_solicitados = {'report', 'mind_map', 'data_table', 'quiz', 'flashcards'}
+            print("Nota: Generando artefactos por defecto (informe, mapa mental, tabla, cuestionario, tarjetas). Usa --todo para todos.")
 
     # Mostrar qué se va a generar
     sin_limite = [t for t in artefactos_solicitados if not TIPOS_ARTEFACTOS[t][1]]

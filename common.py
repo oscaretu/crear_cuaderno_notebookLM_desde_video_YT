@@ -17,6 +17,190 @@ from rich import box
 # Inicializar consola global
 console = Console()
 
+# Constantes para tipos de artefactos (StudioContentType)
+STUDIO_AUDIO = 1
+STUDIO_REPORT = 2
+STUDIO_VIDEO = 3
+STUDIO_QUIZ = 4  # También flashcards (variant distingue)
+STUDIO_MIND_MAP = 5
+STUDIO_INFOGRAPHIC = 7
+STUDIO_SLIDE_DECK = 8
+STUDIO_DATA_TABLE = 9
+
+# Estado completado de artefacto
+ARTIFACT_STATUS_COMPLETED = 3
+
+
+def extraer_url_de_artefacto_raw(artifact_raw: list, artifact_type: int) -> str | None:
+    """Extrae la URL de descarga de un artefacto raw según su tipo.
+
+    Replica la lógica de extracción de notebooklm-py para cada tipo.
+
+    Args:
+        artifact_raw: Datos raw del artefacto de la API
+        artifact_type: Tipo de artefacto (StudioContentType)
+
+    Returns:
+        URL de descarga o None si no está disponible
+    """
+    try:
+        if artifact_type == STUDIO_AUDIO:
+            # Audio: artifact[6][5] contiene lista de medios
+            if len(artifact_raw) <= 6:
+                return None
+            metadata = artifact_raw[6]
+            if not isinstance(metadata, list) or len(metadata) <= 5:
+                return None
+            media_list = metadata[5]
+            if not isinstance(media_list, list) or len(media_list) == 0:
+                return None
+            # Buscar audio/mp4
+            for item in media_list:
+                if isinstance(item, list) and len(item) > 2 and item[2] == "audio/mp4":
+                    return item[0]
+            # Fallback: primer item
+            if isinstance(media_list[0], list) and len(media_list[0]) > 0:
+                return media_list[0][0]
+
+        elif artifact_type == STUDIO_VIDEO:
+            # Video: artifact[8] contiene metadatos con URLs
+            if len(artifact_raw) <= 8:
+                return None
+            metadata = artifact_raw[8]
+            if not isinstance(metadata, list):
+                return None
+            # Buscar lista con URLs http
+            media_list = None
+            for item in metadata:
+                if (isinstance(item, list) and len(item) > 0 and
+                    isinstance(item[0], list) and len(item[0]) > 0 and
+                    isinstance(item[0][0], str) and item[0][0].startswith("http")):
+                    media_list = item
+                    break
+            if not media_list:
+                return None
+            # Buscar video/mp4
+            for item in media_list:
+                if isinstance(item, list) and len(item) > 2 and item[2] == "video/mp4":
+                    return item[0]
+            # Fallback
+            if isinstance(media_list[0], list) and len(media_list[0]) > 0:
+                return media_list[0][0]
+
+        elif artifact_type == STUDIO_INFOGRAPHIC:
+            # Infographic: buscar al revés en el artefacto
+            for item in reversed(artifact_raw):
+                if not isinstance(item, list) or len(item) == 0:
+                    continue
+                if not isinstance(item[0], list):
+                    continue
+                if len(item) <= 2 or not isinstance(item[2], list) or len(item[2]) == 0:
+                    continue
+                content_list = item[2]
+                if not isinstance(content_list[0], list) or len(content_list[0]) <= 1:
+                    continue
+                img_data = content_list[0][1]
+                if (isinstance(img_data, list) and len(img_data) > 0 and
+                    isinstance(img_data[0], str) and img_data[0].startswith("http")):
+                    return img_data[0]
+
+        elif artifact_type == STUDIO_SLIDE_DECK:
+            # Slides: artifact[16][3] contiene URL del PDF
+            if len(artifact_raw) <= 16:
+                return None
+            metadata = artifact_raw[16]
+            if not isinstance(metadata, list) or len(metadata) <= 3:
+                return None
+            pdf_url = metadata[3]
+            if isinstance(pdf_url, str) and pdf_url.startswith("http"):
+                return pdf_url
+
+    except (IndexError, TypeError):
+        pass
+
+    return None
+
+
+async def obtener_urls_artefactos(client, notebook_id: str) -> dict[str, tuple[str, int]]:
+    """Obtiene las URLs de descarga de los artefactos de un cuaderno.
+
+    Args:
+        client: Cliente de NotebookLM
+        notebook_id: ID del cuaderno
+
+    Returns:
+        Diccionario {artifact_id: (url, artifact_type)}
+    """
+    urls = {}
+    try:
+        # Obtener datos raw de artefactos
+        artifacts_raw = await client.artifacts._list_raw(notebook_id)
+
+        for art in artifacts_raw:
+            if not isinstance(art, list) or len(art) < 5:
+                continue
+
+            artifact_id = art[0]
+            artifact_type = art[2]
+            artifact_status = art[4]
+            artifact_title = art[1] if len(art) > 1 else ""
+
+            # Solo procesar artefactos completados
+            if artifact_status != ARTIFACT_STATUS_COMPLETED:
+                continue
+
+            url = extraer_url_de_artefacto_raw(art, artifact_type)
+            if url:
+                # Guardar URL y tipo (el nombre se genera después con el título del Artifact)
+                urls[artifact_id] = (url, artifact_type)
+
+    except Exception as e:
+        debug(f"Error obteniendo URLs de artefactos: {e}")
+
+    return urls
+
+
+def _extension_por_tipo(artifact_type: int) -> str:
+    """Devuelve la extensión de archivo según el tipo de artefacto."""
+    extensiones = {
+        STUDIO_AUDIO: ".mp4",
+        STUDIO_VIDEO: ".mp4",
+        STUDIO_INFOGRAPHIC: ".png",
+        STUDIO_SLIDE_DECK: ".pdf",
+    }
+    return extensiones.get(artifact_type, "")
+
+
+def _subcomando_por_tipo(artifact_type: int) -> str:
+    """Devuelve el subcomando de notebooklm download según el tipo de artefacto."""
+    subcomandos = {
+        STUDIO_AUDIO: "audio",
+        STUDIO_VIDEO: "video",
+        STUDIO_INFOGRAPHIC: "infographic",
+        STUDIO_SLIDE_DECK: "slide-deck",
+    }
+    return subcomandos.get(artifact_type, "")
+
+
+def _limpiar_nombre_archivo(titulo: str) -> str:
+    """Limpia un título para usarlo como nombre de archivo."""
+    if not titulo:
+        return ""
+    import re
+    import unicodedata
+    # Normalizar acentos: convertir á->a, é->e, ñ->n, etc.
+    nombre = unicodedata.normalize('NFKD', titulo)
+    nombre = ''.join(c for c in nombre if not unicodedata.combining(c))
+    # Reemplazar caracteres no válidos, comas y espacios
+    nombre = re.sub(r'[<>:"/\\|?*]', '_', nombre)
+    nombre = nombre.replace(',', '_')
+    nombre = nombre.replace(' ', '_')
+    nombre = nombre.strip()
+    # Limitar longitud
+    if len(nombre) > 100:
+        nombre = nombre[:100]
+    return nombre
+
 # Variable global para modo debug
 DEBUG = False
 
@@ -76,8 +260,14 @@ def artefacto_tiene_idioma(artefacto, idioma: str) -> bool:
     return True
 
 
-async def verificar_artefactos_existentes(client, notebook_id: str, idioma: str = 'es') -> dict:
-    """Verifica qué artefactos ya existen en el cuaderno en el idioma especificado."""
+async def verificar_artefactos_existentes(client, notebook_id: str, idioma: str = 'es') -> tuple[dict, dict]:
+    """Verifica qué artefactos ya existen en el cuaderno en el idioma especificado.
+
+    Returns:
+        Tupla (existentes, urls) donde:
+        - existentes: dict con listas de artefactos por tipo
+        - urls: dict {artifact_id: url} con URLs de descarga
+    """
     debug(f"Verificando artefactos en notebook: {notebook_id} (idioma: {idioma})")
     existentes = {
         'report': [],
@@ -90,6 +280,7 @@ async def verificar_artefactos_existentes(client, notebook_id: str, idioma: str 
         'audio': [],
         'video': [],
     }
+    urls = {}
 
     try:
         # Listar cada tipo de artefacto (con spinner visual si no hay barra de progreso externa)
@@ -184,9 +375,17 @@ async def verificar_artefactos_existentes(client, notebook_id: str, idioma: str 
         console.print(f"[bold red]⚠ Error al verificar artefactos: {e}[/bold red]")
         debug(f"  Excepción general: {e}")
 
+    # Obtener URLs de descarga
+    debug("  Obteniendo URLs de descarga...")
+    try:
+        urls = await obtener_urls_artefactos(client, notebook_id)
+        debug(f"    URLs encontradas: {len(urls)}")
+    except Exception as e:
+        debug(f"    Error obteniendo URLs: {e}")
+
     resumen = ", ".join(f"{k}={len(v)}" for k, v in existentes.items())
     debug(f"Resumen artefactos: {resumen}")
-    return existentes
+    return existentes, urls
 
 
 async def generar_artefactos(client, notebook_id: str, faltantes: list[str], idioma: str = 'es', retardo_entre_tareas: float = 3.0) -> int:
@@ -331,35 +530,88 @@ async def mostrar_informe(client, notebook_id: str):
         console.print(f"[bold red]✗ Error al obtener el informe: {e}[/bold red]")
 
 
-def mostrar_estado_artefactos(existentes: dict) -> tuple[list[str], list[str]]:
-    """Muestra tabla de estado de artefactos y devuelve faltantes."""
+def mostrar_estado_artefactos(existentes: dict, urls: dict = None, notebook_id: str = None) -> tuple[list[str], list[str]]:
+    """Muestra tabla de estado de artefactos y devuelve faltantes.
+
+    Args:
+        existentes: Diccionario con listas de artefactos por tipo.
+        urls: Diccionario {artifact_id: (url, artifact_type)} con URLs de descarga.
+        notebook_id: ID del cuaderno para mostrar URL base.
+    """
     faltantes = []
     faltantes_con_limite = []
+    urls = urls or {}
+    artefactos_con_url = []  # Para mostrar después de la tabla
 
     table = Table(title="Estado de Artefactos", box=box.ROUNDED)
     table.add_column("Artefacto", style="cyan")
     table.add_column("Estado", justify="center")
-    table.add_column("Detalle", style="dim")
+    table.add_column("Título", style="white")
+    table.add_column("ID", style="dim")
 
     for tipo in ORDEN_ARTEFACTOS:
         nombre, tiene_limite = TIPOS_ARTEFACTOS[tipo]
         lista = existentes[tipo]
-        
+
         if lista:
-            status = "[bold green]Disponible[/bold green]"
-            detalles = []
-            for art in lista:
-                titulo = getattr(art, 'title', None) or getattr(art, 'id', 'ID')
-                detalles.append(titulo)
-            detalle_str = "\n".join(detalles)
+            # Mostrar cada artefacto en una fila separada
+            for idx, art in enumerate(lista):
+                art_titulo = getattr(art, 'title', None) or '-'
+                art_id = getattr(art, 'id', '-')
+                url_data = urls.get(art_id)
+
+                # Guardar para mostrar URLs después (url_data es tupla (url, artifact_type))
+                if url_data:
+                    art_url, artifact_type = url_data
+                    # Generar nombre de archivo sugerido usando el título del Artifact
+                    extension = _extension_por_tipo(artifact_type)
+                    nombre_limpio = _limpiar_nombre_archivo(art_titulo)
+                    nombre_archivo = f"{nombre_limpio}{extension}" if nombre_limpio and nombre_limpio != '-' else None
+                    artefactos_con_url.append((nombre, art_titulo, art_url, nombre_archivo, art_id, artifact_type))
+
+                if idx == 0:
+                    # Primera fila: mostrar nombre del tipo y estado
+                    status = "[bold green]Disponible[/bold green]"
+                    table.add_row(nombre, status, art_titulo, art_id)
+                else:
+                    # Filas adicionales del mismo tipo
+                    table.add_row("", "", art_titulo, art_id)
         else:
             status = "[red]No disponible[/red]"
-            detalle_str = "⚠ Límite diario" if tiene_limite else "-"
+            hint = "⚠ Límite diario" if tiene_limite else "-"
+            table.add_row(nombre, status, "-", hint)
             faltantes.append(tipo)
             if tiene_limite:
                 faltantes_con_limite.append(tipo)
-        
-        table.add_row(nombre, status, detalle_str)
 
     console.print("\n", table)
+
+    # Mostrar URL del cuaderno
+    if notebook_id:
+        console.print(f"\n[bold]URL del cuaderno:[/bold]")
+        console.print(f"[yellow]https://notebooklm.google.com/notebook/{notebook_id}[/yellow]")
+
+    # Mostrar URLs de descarga de artefactos
+    if artefactos_con_url:
+        console.print(f"\n[bold]URLs de descarga:[/bold]")
+        comandos_download = []
+
+        for nombre, titulo, url, nombre_archivo, art_id, artifact_type in artefactos_con_url:
+            console.print(f"  • [bold cyan]{nombre}[/bold cyan]: [bold white reverse] {titulo} [/bold white reverse]")
+            console.print(f"    [yellow]{url}[/yellow]")
+            if nombre_archivo:
+                console.print(f"    [dim]Guardar como: {nombre_archivo}[/dim]")
+                # Generar comando notebooklm download
+                subcomando = _subcomando_por_tipo(artifact_type)
+                if subcomando:
+                    comandos_download.append((nombre, titulo, nombre_archivo, art_id, subcomando))
+
+        # Mostrar comandos notebooklm download
+        if comandos_download and notebook_id:
+            console.print(f"\n[bold]Comandos para descargar:[/bold]")
+            for nombre, titulo, nombre_archivo, art_id, subcomando in comandos_download:
+                console.print(f"\n# {nombre}: {titulo}")
+                console.print(f'notebooklm download {subcomando} -n {notebook_id} \\')
+                console.print(f'  -a {art_id} "{nombre_archivo}"')
+
     return faltantes, faltantes_con_limite

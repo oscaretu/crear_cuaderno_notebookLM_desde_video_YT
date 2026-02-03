@@ -108,9 +108,9 @@ Si alcanzas el límite, espera al día siguiente o suscríbete a NotebookLM Plus
 
 ## main.py - Crear cuadernos desde vídeos de YouTube (Python)
 
-Versión: **0.7.0**
+Versión: **0.8.0**
 
-Crea automáticamente un cuaderno en NotebookLM a partir de un vídeo de YouTube. Por defecto solo genera el informe (sin límite diario).
+Crea automáticamente un cuaderno en NotebookLM a partir de un vídeo de YouTube. Por defecto genera: informe, mapa mental, tabla de datos, cuestionario y tarjetas.
 
 ### Uso básico
 
@@ -145,7 +145,7 @@ python main.py <URL_YOUTUBE>
 ### Ejemplos de uso
 
 ```bash
-# Solo informe (por defecto, sin límite)
+# Artefactos por defecto (informe, mapa mental, tabla, cuestionario, tarjetas)
 python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
 
 # Todos los artefactos
@@ -421,7 +421,7 @@ crear_cuaderno_notebookLM_desde_video_YT/
 |---------|---------|-----------------|-------------------|
 | Entrada | URL de YouTube | ID o URL de cuaderno | URL de YouTube |
 | Función principal | Crear cuaderno | Consultar/generar artefactos | Crear cuaderno |
-| Artefactos por defecto | report | ninguno (solo consulta) | report, mind-map |
+| Artefactos por defecto | report, mind_map, data_table, quiz, flashcards | ninguno (solo consulta) | report, mind-map |
 | Límites cuota | Evitados por defecto | Evitados por defecto | Evitados por defecto |
 | Idioma | Configurable (`--idioma`) | Configurable (`--idioma`) | Forzado español |
 | Dependencias | Python + asyncio | Python + asyncio | Bash + jq |
