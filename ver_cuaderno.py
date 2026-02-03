@@ -128,7 +128,7 @@ async def procesar_cuaderno(notebook_id: str, mostrar_informe_flag: bool = False
         existentes = await verificar_artefactos_existentes(client, notebook.id, idioma)
 
         # 5. Mostrar estado de artefactos
-        faltantes, faltantes_con_limite = mostrar_estado_artefactos(existentes)
+        faltantes, faltantes_con_limite = mostrar_estado_artefactos(existentes, notebook.id)
 
         # 6. Generar artefactos si se solicitaron
         if artefactos_solicitados:

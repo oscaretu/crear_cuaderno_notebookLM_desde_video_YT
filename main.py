@@ -253,7 +253,7 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
             existentes = await verificar_artefactos_existentes(client, notebook.id, idioma)
 
             # Mostrar estado de cada artefacto
-            faltantes, faltantes_con_limite = mostrar_estado_artefactos(existentes)
+            faltantes, faltantes_con_limite = mostrar_estado_artefactos(existentes, notebook.id)
 
             # Determinar qué artefactos generar según las opciones
             a_generar = []

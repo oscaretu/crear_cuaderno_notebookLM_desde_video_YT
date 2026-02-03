@@ -331,35 +331,54 @@ async def mostrar_informe(client, notebook_id: str):
         console.print(f"[bold red]✗ Error al obtener el informe: {e}[/bold red]")
 
 
-def mostrar_estado_artefactos(existentes: dict) -> tuple[list[str], list[str]]:
-    """Muestra tabla de estado de artefactos y devuelve faltantes."""
+def mostrar_estado_artefactos(existentes: dict, notebook_id: str = None) -> tuple[list[str], list[str]]:
+    """Muestra tabla de estado de artefactos y devuelve faltantes.
+
+    Args:
+        existentes: Diccionario con listas de artefactos por tipo.
+        notebook_id: ID del cuaderno para construir URLs.
+    """
     faltantes = []
     faltantes_con_limite = []
 
     table = Table(title="Estado de Artefactos", box=box.ROUNDED)
     table.add_column("Artefacto", style="cyan")
     table.add_column("Estado", justify="center")
-    table.add_column("Detalle", style="dim")
+    table.add_column("Título", style="white")
+    table.add_column("ID", style="dim")
+
+    # URL base del cuaderno
+    base_url = f"https://notebooklm.google.com/notebook/{notebook_id}" if notebook_id else None
 
     for tipo in ORDEN_ARTEFACTOS:
         nombre, tiene_limite = TIPOS_ARTEFACTOS[tipo]
         lista = existentes[tipo]
-        
+
         if lista:
-            status = "[bold green]Disponible[/bold green]"
-            detalles = []
-            for art in lista:
-                titulo = getattr(art, 'title', None) or getattr(art, 'id', 'ID')
-                detalles.append(titulo)
-            detalle_str = "\n".join(detalles)
+            # Mostrar cada artefacto en una fila separada
+            for idx, art in enumerate(lista):
+                art_titulo = getattr(art, 'title', None) or '-'
+                art_id = getattr(art, 'id', '-')
+
+                if idx == 0:
+                    # Primera fila: mostrar nombre del tipo y estado
+                    status = "[bold green]Disponible[/bold green]"
+                    table.add_row(nombre, status, art_titulo, art_id)
+                else:
+                    # Filas adicionales del mismo tipo
+                    table.add_row("", "", art_titulo, art_id)
         else:
             status = "[red]No disponible[/red]"
-            detalle_str = "⚠ Límite diario" if tiene_limite else "-"
+            hint = "⚠ Límite diario" if tiene_limite else "-"
+            table.add_row(nombre, status, "-", hint)
             faltantes.append(tipo)
             if tiene_limite:
                 faltantes_con_limite.append(tipo)
-        
-        table.add_row(nombre, status, detalle_str)
 
     console.print("\n", table)
+
+    # Mostrar URL del cuaderno si está disponible
+    if base_url:
+        console.print(f"[dim]URL del cuaderno: {base_url}[/dim]")
+
     return faltantes, faltantes_con_limite
