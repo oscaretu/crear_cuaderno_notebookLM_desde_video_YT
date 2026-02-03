@@ -338,6 +338,79 @@ Devuelve la lista de cuadernos en formato JSON ordenados por fecha de creación 
 
 ---
 
+## Descargar artefactos con notebooklm
+
+Los scripts Python muestran comandos de descarga listos para copiar. También puedes usar estos comandos manualmente:
+
+### Descargar informes (report)
+
+```bash
+# Descargar el informe más reciente
+notebooklm download report -n NOTEBOOK_ID
+
+# Descargar a un archivo específico
+notebooklm download report -n NOTEBOOK_ID "Mi_Informe.md"
+
+# Descargar todos los informes a un directorio
+notebooklm download report -n NOTEBOOK_ID --all ./informes/
+
+# Descargar un informe específico por ID
+notebooklm download report -n NOTEBOOK_ID -a ARTIFACT_ID "Nombre_del_Informe.md"
+```
+
+### Descargar otros artefactos
+
+```bash
+# Audio (podcast)
+notebooklm download audio -n NOTEBOOK_ID -a ARTIFACT_ID "Podcast.mp4"
+
+# Video
+notebooklm download video -n NOTEBOOK_ID -a ARTIFACT_ID "Video.mp4"
+
+# Presentación (slides)
+notebooklm download slide-deck -n NOTEBOOK_ID -a ARTIFACT_ID "Presentacion.pdf"
+
+# Infografía
+notebooklm download infographic -n NOTEBOOK_ID -a ARTIFACT_ID "Infografia.png"
+
+# Mapa mental
+notebooklm download mind-map -n NOTEBOOK_ID -a ARTIFACT_ID "Mapa_Mental.png"
+
+# Quiz
+notebooklm download quiz -n NOTEBOOK_ID -a ARTIFACT_ID "Quiz.json"
+
+# Flashcards
+notebooklm download flashcards -n NOTEBOOK_ID -a ARTIFACT_ID "Flashcards.json"
+
+# Tabla de datos
+notebooklm download data-table -n NOTEBOOK_ID -a ARTIFACT_ID "Tabla.csv"
+```
+
+### Opciones comunes
+
+| Opción | Descripción |
+|--------|-------------|
+| `-n, --notebook` | ID del cuaderno |
+| `-a, --artifact` | ID del artefacto específico |
+| `--latest` | Descargar el más reciente (por defecto) |
+| `--earliest` | Descargar el más antiguo |
+| `--all` | Descargar todos |
+| `--name` | Filtrar por título (coincidencia difusa) |
+| `--dry-run` | Previsualizar sin descargar |
+| `--force` | Sobrescribir archivos existentes |
+
+### Exportar a Google Docs/Sheets
+
+```bash
+# Exportar informe a Google Docs
+notebooklm artifact export ARTIFACT_ID --title "Mi Informe" --type docs
+
+# Exportar quiz/flashcards/tabla a Google Sheets
+notebooklm artifact export ARTIFACT_ID --title "Mis Datos" --type sheets
+```
+
+---
+
 ## extraer_cookies_firefox.py - Extraer cookies de Firefox para autenticación
 
 Versión: **1.0.0**
