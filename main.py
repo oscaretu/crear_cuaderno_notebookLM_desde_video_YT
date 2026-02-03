@@ -250,10 +250,10 @@ async def procesar_video(url: str, mostrar_informe_flag: bool = False, idioma: s
             # Verificar artefactos existentes (considerando idioma)
             debug("PASO 4.1: Verificar artefactos existentes")
             print(f"\nVerificando artefactos existentes (idioma: {idioma})...")
-            existentes = await verificar_artefactos_existentes(client, notebook.id, idioma)
+            existentes, urls = await verificar_artefactos_existentes(client, notebook.id, idioma)
 
             # Mostrar estado de cada artefacto
-            faltantes, faltantes_con_limite = mostrar_estado_artefactos(existentes, notebook.id)
+            faltantes, faltantes_con_limite = mostrar_estado_artefactos(existentes, urls, notebook.id)
 
             # Determinar qué artefactos generar según las opciones
             a_generar = []
