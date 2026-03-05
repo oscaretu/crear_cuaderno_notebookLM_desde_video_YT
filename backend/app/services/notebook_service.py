@@ -66,16 +66,29 @@ def extraer_video_id(url: str) -> Optional[str]:
 
 
 def obtener_metadatos_video(url: str) -> dict:
-    ydl_opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "extract_flat": False,
-        "ignoreerrors": False,
-        "format": "best",  # Evitar errores de formato
-    }
+    import io
+    import sys
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
+    # Suprimir output de yt-dlp
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+    sys.stdout = io.StringIO()
+    sys.stderr = io.StringIO()
+
+    try:
+        ydl_opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": "incomplete",
+            "ignoreerrors": True,
+            "logger": logger,
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+
+        if not info:
+            raise ValueError(f"No se pudo obtener información del vídeo: {url}")
 
         upload_date = info.get("upload_date", "")
         if upload_date:
@@ -90,6 +103,9 @@ def obtener_metadatos_video(url: str) -> dict:
             "video_id": info.get("id", ""),
             "description": info.get("description", ""),
         }
+    finally:
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
 
 
 def limpiar_texto(texto: str, max_length: int = 50) -> str:
