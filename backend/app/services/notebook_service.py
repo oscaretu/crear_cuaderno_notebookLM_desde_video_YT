@@ -529,7 +529,15 @@ async def create_notebook_from_youtube(
     if not video_id:
         return {"success": False, "error": "URL de YouTube inválida"}
 
-    metadatos = obtener_metadatos_video(youtube_url)
+    try:
+        metadatos = obtener_metadatos_video(youtube_url)
+    except Exception as e:
+        logger.error(f"Error getting video metadata: {e}")
+        return {
+            "success": False,
+            "error": f"No se pudo obtener información del vídeo: {youtube_url}",
+        }
+
     nombre_cuaderno = generar_nombre_cuaderno(metadatos)
 
     if artifacts is None:

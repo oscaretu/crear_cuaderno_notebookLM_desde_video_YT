@@ -102,6 +102,8 @@ async def check_auth_status():
 @router.post("/notebooks", response_model=dict)
 async def create_notebook(request: CreateNotebookRequest):
     try:
+        logger.info(f"Creating notebook from URL: {request.youtube_url}")
+
         result = await notebook_service.create_notebook_from_youtube(
             youtube_url=request.youtube_url,
             language=request.language,
