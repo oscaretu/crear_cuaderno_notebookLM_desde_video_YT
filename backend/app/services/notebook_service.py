@@ -71,6 +71,7 @@ def obtener_metadatos_video(url: str) -> dict:
         "no_warnings": True,
         "extract_flat": False,
         "ignoreerrors": False,
+        "format": "best",  # Evitar errores de formato
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
