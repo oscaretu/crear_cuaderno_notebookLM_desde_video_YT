@@ -326,6 +326,7 @@ def check_auth_status() -> dict:
                 "authenticated": True,
                 "message": "Autenticado correctamente",
                 "storage_path": str(storage_path),
+                "validated": False,  # Not validated with real API call
             }
         else:
             return {
@@ -338,4 +339,40 @@ def check_auth_status() -> dict:
             "authenticated": False,
             "message": f"Error al verificar: {str(e)}",
             "storage_path": str(storage_path),
+        }
+
+
+async def verify_auth_with_api() -> dict:
+    """Verify authentication by making a real API call to NotebookLM"""
+    storage_path = settings.storage_state_path
+
+    if not storage_path.exists():
+        return {
+            "authenticated": False,
+            "message": "No autenticado. Extrae cookies primero.",
+        }
+
+    try:
+        from notebooklm import NotebookLMClient
+
+        async with await NotebookLMClient.from_storage() as client:
+            await client.notebooks.list()
+            return {
+                "authenticated": True,
+                "message": "Autenticado correctamente",
+            }
+    except Exception as e:
+        error_msg = str(e)
+        if (
+            "Authentication expired" in error_msg
+            or "invalid" in error_msg.lower()
+            or "login" in error_msg.lower()
+        ):
+            return {
+                "authenticated": False,
+                "message": "Las cookies han expirado. Ve a Autenticación para extraer nuevas cookies.",
+            }
+        return {
+            "authenticated": False,
+            "message": f"Error de autenticación: {error_msg[:100]}",
         }

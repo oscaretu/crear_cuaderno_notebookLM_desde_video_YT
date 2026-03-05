@@ -1,5 +1,6 @@
 import asyncio
 import re
+import logging
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
 from typing import Optional
@@ -8,6 +9,10 @@ import yt_dlp
 from notebooklm import NotebookLMClient
 
 from app.core.config import settings
+
+# Configure logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 STUDIO_AUDIO = 1
@@ -180,6 +185,38 @@ def extraer_url_artefacto_raw(artifact_raw: list, artifact_type: int) -> Optiona
     return None
 
 
+async def obtener_markdown_reportes(client, notebook_id: str) -> dict:
+    """Extrae el contenido markdown de los informes desde los datos raw"""
+    markdown_contents = {}
+    try:
+        artifacts_raw = await client.artifacts._list_raw(notebook_id)
+
+        for art in artifacts_raw:
+            if not isinstance(art, list) or len(art) < 8:
+                continue
+
+            artifact_id = art[0]
+            artifact_type = art[2]
+            artifact_status = art[4]
+
+            if artifact_type != STUDIO_REPORT:
+                continue
+
+            if artifact_status != ARTIFACT_STATUS_COMPLETED:
+                continue
+
+            # El contenido markdown está en índice 7, subíndice 0
+            if len(art) > 7 and isinstance(art[7], list) and len(art[7]) > 0:
+                markdown_content = art[7][0]
+                if isinstance(markdown_content, str) and len(markdown_content) > 0:
+                    markdown_contents[artifact_id] = markdown_content
+
+    except Exception as e:
+        logger.error(f"Error extracting markdown reports: {e}")
+
+    return markdown_contents
+
+
 async def obtener_urls_artefactos(client, notebook_id: str) -> dict:
     urls = {}
     try:
@@ -206,6 +243,41 @@ async def obtener_urls_artefactos(client, notebook_id: str) -> dict:
     return urls
 
 
+def transformar_artefacto(artefacto, tipo: str) -> dict:
+    """Transforma un artefacto para añadir campos necesarios"""
+    result = {}
+
+    # Intentar obtener el nombre
+    if hasattr(artefacto, "name"):
+        result["name"] = artefacto.name
+    elif hasattr(artefacto, "title"):
+        result["name"] = artefacto.title
+    else:
+        result["name"] = f"{tipo.title()}"
+
+    # Intentar obtener la URL de descarga
+    if hasattr(artefacto, "download_url"):
+        result["download_url"] = artefacto.download_url
+    elif hasattr(artefacto, "url"):
+        result["download_url"] = artefacto.url
+    else:
+        result["download_url"] = None
+
+    # URL del artefacto
+    if hasattr(artefacto, "url"):
+        result["url"] = artefacto.url
+    else:
+        result["url"] = None
+
+    # ID del artefacto
+    if hasattr(artefacto, "id"):
+        result["id"] = artefacto.id
+    else:
+        result["id"] = None
+
+    return result
+
+
 async def verificar_artefactos_existentes(
     client, notebook_id: str, idioma: str = "es"
 ) -> tuple[dict, dict]:
@@ -217,82 +289,134 @@ async def verificar_artefactos_existentes(
         try:
             reports = await client.artifacts.list_reports(notebook_id)
             if reports:
-                existentes["report"] = list(reports)
-        except Exception:
-            pass
+                existentes["report"] = [
+                    transformar_artefacto(r, "report") for r in reports
+                ]
+        except Exception as e:
+            logger.error(f"[{notebook_id}] Error getting reports: {e}")
 
         # Audios
         try:
             audios = await client.artifacts.list_audio(notebook_id)
             if audios:
-                existentes["audio"] = list(audios)
-        except Exception:
-            pass
+                existentes["audio"] = [
+                    transformar_artefacto(a, "audio") for a in audios
+                ]
+        except Exception as e:
+            logger.error(f"[{notebook_id}] Error getting audios: {e}")
 
         # Slides
         try:
             slides = await client.artifacts.list_slide_decks(notebook_id)
             if slides:
-                existentes["slides"] = list(slides)
-        except Exception:
-            pass
+                existentes["slides"] = [
+                    transformar_artefacto(s, "slides") for s in slides
+                ]
+        except Exception as e:
+            logger.error(f"[{notebook_id}] Error getting slides: {e}")
 
         # Infographics
         try:
             infographics = await client.artifacts.list_infographics(notebook_id)
             if infographics:
-                existentes["infographic"] = list(infographics)
-        except Exception:
-            pass
+                existentes["infographic"] = [
+                    transformar_artefacto(i, "infographic") for i in infographics
+                ]
+        except Exception as e:
+            logger.error(f"[{notebook_id}] Error getting infographics: {e}")
 
         # Videos
         try:
             videos = await client.artifacts.list_video(notebook_id)
             if videos:
-                existentes["video"] = list(videos)
-        except Exception:
-            pass
+                existentes["video"] = [
+                    transformar_artefacto(v, "video") for v in videos
+                ]
+        except Exception as e:
+            logger.error(f"[{notebook_id}] Error getting videos: {e}")
 
-        # Mind maps
+        # Mind maps - obtener todos y filtrar por kind
         try:
-            mind_maps = await client.artifacts.list(notebook_id, 5)
+            # Usar list() sin tipo para obtener todos los artefactos
+            all_artifacts = await client.artifacts.list(notebook_id)
+            logger.info(f"[{notebook_id}] All artifacts count: {len(all_artifacts)}")
+
+            # Filtrar mind maps por artifact_type
+            mind_maps = [a for a in all_artifacts if a.artifact_type == STUDIO_MIND_MAP]
+            logger.info(f"[{notebook_id}] Mind maps filtered: {len(mind_maps)}")
+
             if mind_maps:
-                existentes["mind_map"] = list(mind_maps)
-        except Exception:
-            pass
+                existentes["mind_map"] = [
+                    transformar_artefacto(mm, "mind_map") for mm in mind_maps
+                ]
+                logger.info(
+                    f"[{notebook_id}] Transformed mind maps: {existentes['mind_map'][:2]}"
+                )
+        except Exception as e:
+            logger.error(f"[{notebook_id}] Error getting mind maps: {e}")
 
         # Data tables
         try:
             data_tables = await client.artifacts.list_data_tables(notebook_id)
             if data_tables:
-                existentes["data_table"] = list(data_tables)
-        except Exception:
-            pass
+                existentes["data_table"] = [
+                    transformar_artefacto(dt, "data_table") for dt in data_tables
+                ]
+        except Exception as e:
+            logger.error(f"[{notebook_id}] Error getting data tables: {e}")
 
         # Quizzes
         try:
             quizzes = await client.artifacts.list_quizzes(notebook_id)
             if quizzes:
-                existentes["quiz"] = list(quizzes)
-        except Exception:
-            pass
+                existentes["quiz"] = [transformar_artefacto(q, "quiz") for q in quizzes]
+        except Exception as e:
+            logger.error(f"[{notebook_id}] Error getting quizzes: {e}")
 
         # Flashcards
         try:
             flashcards = await client.artifacts.list_flashcards(notebook_id)
             if flashcards:
-                existentes["flashcards"] = list(flashcards)
-        except Exception:
-            pass
+                existentes["flashcards"] = [
+                    transformar_artefacto(fc, "flashcards") for fc in flashcards
+                ]
+        except Exception as e:
+            logger.error(f"[{notebook_id}] Error getting flashcards: {e}")
 
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"[{notebook_id}] Error general en verificar_artefactos: {e}")
 
-    # URLs de descarga
+    # Obtener URLs de descarga
     try:
         urls = await obtener_urls_artefactos(client, notebook_id)
-    except Exception:
-        pass
+        logger.info(f"[{notebook_id}] URLs obtained: {urls}")
+
+        # Asignar URLs a cada artefacto
+        for tipo, artefactos in existentes.items():
+            for art in artefactos:
+                art_id = art.get("id")
+                if art_id and art_id in urls:
+                    url_info = urls[art_id]
+                    if url_info and len(url_info) >= 1:
+                        art["download_url"] = url_info[0]
+    except Exception as e:
+        logger.error(f"[{notebook_id}] Error getting download URLs: {e}")
+
+    # Obtener contenido markdown de informes
+    try:
+        markdown_contents = await obtener_markdown_reportes(client, notebook_id)
+        logger.info(
+            f"[{notebook_id}] Markdown reports obtained: {len(markdown_contents)}"
+        )
+
+        # Asignar markdown a los informes
+        if "report" in existentes:
+            for art in existentes["report"]:
+                art_id = art.get("id")
+                if art_id and art_id in markdown_contents:
+                    art["markdown_content"] = markdown_contents[art_id]
+    except Exception as e:
+        logger.error(f"[{notebook_id}] Error getting markdown content: {e}")
 
     return existentes, urls
 
@@ -321,18 +445,26 @@ async def generar_artefactos(
     exitosos = 0
     cuotas_agotadas = set()
 
+    logger.info(f"[{notebook_id}] Iniciando generación de artefactos: {faltantes}")
+
     for i, tipo in enumerate(faltantes):
+        logger.info(f"[{notebook_id}] Generando {tipo}...")
         generar_func, kwargs = CONFIG_ARTEFACTOS[tipo]
         grupo_cuota = CUOTA_COMPARTIDA.get(tipo)
 
         if grupo_cuota and grupo_cuota in cuotas_agotadas:
+            logger.warning(f"[{notebook_id}] Cuota agotada para {tipo}, saltando")
             continue
 
         if i > 0:
             await asyncio.sleep(retardo)
 
         try:
+            logger.info(
+                f"[{notebook_id}] Llamando a {generar_func.__name__} con kwargs={kwargs}"
+            )
             resultado = await generar_func(notebook_id, **kwargs)
+            logger.info(f"[{notebook_id}] Resultado de {tipo}: {resultado}")
 
             if tipo in ARTEFACTOS_SINCRONOS:
                 if resultado and resultado.get("mind_map"):

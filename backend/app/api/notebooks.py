@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+import logging
 from app.models.schemas import (
     CreateNotebookRequest,
     NotebookResponse,
@@ -13,6 +14,8 @@ from app.models.schemas import (
 )
 from app.services import cookie_service, notebook_service
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
@@ -67,12 +70,30 @@ async def extract_cookies(request: ExtractCookiesRequest):
 
 @router.get("/auth/status", response_model=AuthStatusResponse)
 async def check_auth_status():
-    result = cookie_service.check_auth_status()
-    return AuthStatusResponse(
-        authenticated=result["authenticated"],
-        message=result["message"],
-        storage_path=result.get("storage_path"),
-    )
+    # First check if cookies exist
+    basic_check = cookie_service.check_auth_status()
+
+    if not basic_check["authenticated"]:
+        return AuthStatusResponse(
+            authenticated=False,
+            message=basic_check["message"],
+            storage_path=basic_check.get("storage_path"),
+        )
+
+    # Then verify with real API call
+    try:
+        api_check = await cookie_service.verify_auth_with_api()
+        return AuthStatusResponse(
+            authenticated=api_check["authenticated"],
+            message=api_check["message"],
+            storage_path=basic_check.get("storage_path"),
+        )
+    except Exception as e:
+        return AuthStatusResponse(
+            authenticated=False,
+            message=f"Error verificando autenticación: {str(e)[:100]}",
+            storage_path=basic_check.get("storage_path"),
+        )
 
 
 # ==================== NOTEBOOK ENDPOINTS ====================
@@ -112,7 +133,9 @@ async def list_notebooks():
 @router.get("/notebooks/{notebook_id}", response_model=dict)
 async def get_notebook(notebook_id: str, language: str = "es"):
     try:
+        logger.info(f"Getting notebook details for {notebook_id}")
         notebook = await notebook_service.get_notebook_details(notebook_id, language)
+        logger.info(f"Notebook details: {notebook}")
 
         if not notebook:
             raise HTTPException(status_code=404, detail="Cuaderno no encontrado")
@@ -121,6 +144,7 @@ async def get_notebook(notebook_id: str, language: str = "es"):
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error getting notebook {notebook_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -150,4 +174,15 @@ async def generate_artifacts(notebook_id: str, request: GenerateArtifactsRequest
     except HTTPException:
         raise
     except Exception as e:
+        error_msg = str(e)
+        # Check if it's an auth error
+        if (
+            "Authentication expired" in error_msg
+            or "invalid" in error_msg.lower()
+            or "login" in error_msg.lower()
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail="Las cookies de autenticación han expirado. Ve a la pestaña Autenticación para extraer nuevas cookies.",
+            )
         raise HTTPException(status_code=500, detail=str(e))

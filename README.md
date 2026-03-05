@@ -1,6 +1,38 @@
 # NotebookLM Tools
 
-Herramientas de línea de comandos para automatizar tareas en Google NotebookLM.
+Herramientas de línea de comandos y interfaz web para automatizar tareas en Google NotebookLM.
+
+## Interfaz Web (Nuevo)
+
+También disponible como aplicación web con frontend React:
+
+### Ejecutar
+
+```bash
+# Backend (terminal 1)
+cd backend
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --port 8000
+
+# Frontend (terminal 2)
+cd frontend
+npm install
+npm run dev
+```
+
+La aplicación estará disponible en: **http://localhost:3000**
+
+### Características de la interfaz web
+
+- Ver lista de cuadernos con búsqueda y ordenación
+- Crear nuevos cuadernos desde YouTube
+- Ver detalles de cada cuaderno con todos sus artefactos
+- Generar nuevos artefactos
+- **Ver informes en HTML** con opción de copiar markdown
+- Descargar vídeos, audios, presentaciones e infografías
+- Extraer cookies de Firefox directamente desde la interfaz
+
+---
 
 ## Requisitos previos
 
@@ -474,7 +506,21 @@ notebooklm auth check --test
 
 ```
 crear_cuaderno_notebookLM_desde_video_YT/
-├── common.py                                  # Módulo compartido (artefactos, debug, etc.)
+├── backend/                                  # FastAPI - API REST
+│   ├── app/
+│   │   ├── api/                              # Endpoints de la API
+│   │   ├── services/                         # Lógica de negocio
+│   │   └── main.py                           # Punto de entrada
+│   ├── requirements.txt                      # Dependencias Python
+│   └── tests/                                # Tests unitarios
+├── frontend/                                 # React + Vite - Interfaz web
+│   ├── src/
+│   │   ├── App.jsx                           # Componente principal
+│   │   ├── services/api.js                   # Cliente API
+│   │   └── index.css                         # Estilos
+│   ├── package.json
+│   └── vite.config.js
+├── common.py                                  # Módulo compartido (CLI)
 ├── main.py                                    # Crear cuadernos desde YouTube (Python)
 ├── ver_cuaderno.py                            # Consultar/gestionar cuadernos existentes (Python)
 ├── crear_cuaderno.sh                          # Crear cuadernos (Bash)
