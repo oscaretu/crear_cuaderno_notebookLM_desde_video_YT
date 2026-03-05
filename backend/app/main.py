@@ -2,12 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from app.api import notebooks
-from app.core.config import settings
+from app.core.config import settings, setup_logging
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# Configure logging based on debug setting
+logger = setup_logging(settings.debug)
 
 app = FastAPI(
     title=settings.app_name,
@@ -42,6 +40,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--port", type=int, default=8000, help="Port to bind (default: 8000)"
     )
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     args = parser.parse_args()
+
+    # Override debug setting if passed as argument
+    if args.debug:
+        settings.debug = True
+        setup_logging(True)
 
     uvicorn.run(app, host=args.host, port=args.port)

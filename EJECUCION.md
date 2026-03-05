@@ -29,6 +29,29 @@ python -m app.main --host 127.0.0.1 --port 8000
 
 El servidor estará disponible en: **http://127.0.0.1:8000**
 
+### Parámetros
+
+| Parámetro | Descripción | Default |
+|-----------|-------------|---------|
+| `--host` | Host donde bindear | `127.0.0.1` |
+| `--port` | Puerto | `8000` |
+| `--debug` | Activar logs de depuración | `false` |
+
+### Activar debug
+
+Tienes tres opciones:
+
+```bash
+# 1. Argumento CLI
+python -m app.main --debug
+
+# 2. Variable de entorno
+DEBUG=true python -m app.main
+
+# 3. Archivo .env
+echo "DEBUG=true" > backend/.env
+```
+
 ### Documentación de la API
 
 - Swagger UI: http://127.0.0.1:8000/docs

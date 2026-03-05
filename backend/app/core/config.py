@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from pathlib import Path
+import logging
 
 
 class Settings(BaseSettings):
@@ -14,8 +15,20 @@ class Settings(BaseSettings):
     default_timeout_fuente: float = 60.0
     default_retardo: float = 3.0
 
+    # Debug
+    debug: bool = False
+
     class Config:
         env_file = ".env"
+
+
+def setup_logging(debug: bool = False):
+    """Configura el nivel de logging según el parámetro debug"""
+    level = logging.DEBUG if debug else logging.WARNING
+    logging.basicConfig(
+        level=level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    return logging.getLogger(__name__)
 
 
 settings = Settings()

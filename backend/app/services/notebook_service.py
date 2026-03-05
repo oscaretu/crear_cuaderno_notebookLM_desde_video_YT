@@ -12,7 +12,7 @@ from app.core.config import settings
 
 # Configure logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG if settings.debug else logging.WARNING)
 
 
 STUDIO_AUDIO = 1
