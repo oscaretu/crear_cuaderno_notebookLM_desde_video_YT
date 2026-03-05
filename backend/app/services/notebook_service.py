@@ -81,7 +81,6 @@ def obtener_metadatos_video(url: str) -> dict:
             "no_warnings": True,
             "extract_flat": "incomplete",
             "ignoreerrors": True,
-            "logger": logger,
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -103,6 +102,10 @@ def obtener_metadatos_video(url: str) -> dict:
             "video_id": info.get("id", ""),
             "description": info.get("description", ""),
         }
+    except ValueError:
+        raise
+    except Exception as e:
+        raise ValueError(f"Error al obtener metadatos: {str(e)}")
     finally:
         sys.stdout = old_stdout
         sys.stderr = old_stderr
