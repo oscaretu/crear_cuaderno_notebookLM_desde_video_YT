@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
+import asyncio
 import logging
 from app.models.schemas import (
     CreateNotebookRequest,
@@ -153,25 +154,52 @@ async def get_notebook(notebook_id: str, language: str = "es"):
 @router.post(
     "/notebooks/{notebook_id}/artifacts", response_model=GenerateArtifactsResponse
 )
-async def generate_artifacts(notebook_id: str, request: GenerateArtifactsRequest):
+async def generate_artifacts(
+    notebook_id: str,
+    request: GenerateArtifactsRequest,
+    background_tasks: BackgroundTasks,
+):
     try:
-        result = await notebook_service.generate_artifacts(
-            notebook_id=notebook_id,
-            artifact_types=request.artifact_types,
-            language=request.language,
-            retardo=request.retardo,
-        )
+        # Start generation in background and return immediately
+        def run_generation():
+            import asyncio
+            from notebooklm import NotebookLMClient
 
-        if not result.get("success"):
-            raise HTTPException(
-                status_code=400, detail=result.get("error", "Error desconocido")
-            )
+            async def _generate():
+                try:
+                    await notebook_service.generate_artifacts(
+                        notebook_id=notebook_id,
+                        artifact_types=request.artifact_types,
+                        language=request.language,
+                        retardo=request.retardo,
+                    )
+                except Exception as e:
+                    logger.error(f"Background generation error: {e}")
+
+            asyncio.run(_generate())
+
+        # Add task to background
+        background_tasks.add_task(run_generation)
+
+        # Return immediately with success message
+        artifact_names = {
+            "report": "informe",
+            "mind_map": "mapa mental",
+            "data_table": "tabla de datos",
+            "slides": "presentación",
+            "infographic": "infografía",
+            "quiz": "cuestionario",
+            "flashcards": "tarjetas",
+            "audio": "audio",
+            "video": "video",
+        }
+        tipos = ", ".join([artifact_names.get(t, t) for t in request.artifact_types])
 
         return GenerateArtifactsResponse(
             notebook_id=notebook_id,
-            generated=result["generated"],
-            total=result["total"],
-            message=result["message"],
+            generated=len(request.artifact_types),
+            total=len(request.artifact_types),
+            message=f"Generación iniciada para: {tipos}. La generación se realizará en background.",
         )
     except HTTPException:
         raise

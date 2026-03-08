@@ -16,6 +16,23 @@ const ARTIFACT_TYPES = [
 
 const DEFAULT_ARTIFACTS = ['report', 'mind_map', 'data_table', 'quiz', 'flashcards']
 
+// Helper to get initial profile from localStorage synchronously
+const getInitialProfile = () => {
+  try {
+    return localStorage.getItem('notebooklm_default_profile') || ''
+  } catch {
+    return ''
+  }
+}
+
+const getInitialUseDefaultProfile = () => {
+  try {
+    return !!localStorage.getItem('notebooklm_default_profile')
+  } catch {
+    return false
+  }
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState('notebooks')
   const [authStatus, setAuthStatus] = useState(null)
@@ -37,21 +54,74 @@ function App() {
   const [loadingDetail, setLoadingDetail] = useState(false)
   
   // Sort state for notebooks list
-  const [sortOrder, setSortOrder] = useState('alpha') // 'alpha', 'alpha-rev', 'date-asc', 'date-desc'
+  const [sortOrder, setSortOrder] = useState('date-desc') // 'alpha', 'alpha-rev', 'date-asc', 'date-desc'
   
   // Search state
   const [searchQuery, setSearchQuery] = useState('')
   
   // Auth form
   const [username, setUsername] = useState('oscar')
-  const [selectedProfile, setSelectedProfile] = useState('')
+  const [selectedProfile, setSelectedProfile] = useState(getInitialProfile())
   const [profiles, setProfiles] = useState([])
+  const [profileFilter, setProfileFilter] = useState('')
+  const [useDefaultProfile, setUseDefaultProfile] = useState(getInitialUseDefaultProfile())
   const [extracting, setExtracting] = useState(false)
   const [showMarkdownModal, setShowMarkdownModal] = useState(null) // { title, content }
   const [copiedId, setCopiedId] = useState(null) // ID of artifact being copied
 
   // Global loading state for cursor
   const isLoading = loading || loadingDetail || creating || extracting
+
+  // Check for URL parameter on load (supports both query string and hash)
+  useEffect(() => {
+    // Check query string first
+    const params = new URLSearchParams(window.location.search)
+    let videoUrl = params.get('url')
+    
+    // If not in query string, check hash (format: #/create?url=...)
+    if (!videoUrl) {
+      const hash = window.location.hash
+      const hashParams = new URLSearchParams(hash.split('?')[1] || '')
+      videoUrl = hashParams.get('url')
+    }
+    
+    if (videoUrl) {
+      setYoutubeUrl(videoUrl)
+      setActiveTab('create')
+      // Clean URL after using parameter
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
+  }, [])
+
+  // Load default profile from localStorage on mount
+  useEffect(() => {
+    const savedProfile = localStorage.getItem('notebooklm_default_profile')
+    if (savedProfile) {
+      setSelectedProfile(savedProfile)
+      setUseDefaultProfile(true)
+    }
+  }, [])
+
+  // Apply default profile when profiles are loaded
+  useEffect(() => {
+    if (profiles.length > 0 && useDefaultProfile) {
+      const savedProfile = localStorage.getItem('notebooklm_default_profile')
+      if (savedProfile) {
+        // Check if saved profile exists in loaded profiles
+        const profileExists = profiles.some(p => p.display_name === savedProfile)
+        if (profileExists) {
+          setSelectedProfile(savedProfile)
+        }
+      }
+    }
+  }, [profiles, useDefaultProfile])
+
+  // Save profile to localStorage when it changes and default is enabled
+  useEffect(() => {
+    if (useDefaultProfile && selectedProfile) {
+      localStorage.setItem('notebooklm_default_profile', selectedProfile)
+    }
+  }, [selectedProfile, useDefaultProfile])
 
   useEffect(() => {
     checkAuthStatus()
@@ -161,7 +231,8 @@ function App() {
     setSuccess(null)
     try {
       const result = await api.createNotebook(youtubeUrl, language, selectedArtifacts)
-      setSuccess(`Cuaderno creado: ${result.notebook.title}`)
+      const notebookName = result.notebook_name || result.notebook?.title || 'Cuaderno'
+      setSuccess(`Cuaderno creado: ${notebookName}`)
       setYoutubeUrl('')
       loadNotebooks()
     } catch (err) {
@@ -177,11 +248,8 @@ function App() {
     setSuccess(null)
     try {
       const result = await api.generateArtifacts(notebookId, artifactTypes, language)
-      setSuccess(result.message)
-      // Force refresh the detail view after a short delay to let the backend process
-      setTimeout(() => {
-        loadNotebookDetail(notebookId)
-      }, 1000)
+      // Generation is now async, show message and don't wait
+      setSuccess(result.message + ' Haz clic en "Actualizar" para ver los resultados.')
     } catch (err) {
       setError(err.message)
       if (err.message.includes('autenticación') || err.message.includes('expired')) {
@@ -200,6 +268,28 @@ function App() {
     } catch (err) {
       console.error('Error copying:', err)
     }
+  }
+
+  const handleDownloadMarkdown = (content, filename, title, notebookUrl) => {
+    const now = new Date()
+    const date = now.toISOString().slice(0, 10).replace(/-/g, '') + '_' + now.toTimeString().slice(0, 5).replace(':', '')
+    const safeTitle = (title || 'cuaderno').replace(/[/\\?%*:|"<>]/g, '-')
+    const safeFilename = (filename || 'informe').replace(/[/\\?%*:|"<>]/g, '-')
+    const fullFilename = `${safeTitle} -- ${safeFilename} -- ${date}.md`
+    
+    const header = title && notebookUrl 
+      ? `> Este documento es un informe del cuaderno **${title}**\n> [${notebookUrl}](${notebookUrl})\n\n` 
+      : ''
+    const fullContent = header + content
+    const blob = new Blob([fullContent], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fullFilename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   const handleSelectArtifact = (artifactId) => {
@@ -238,7 +328,7 @@ function App() {
     }
   }
 
-  const renderArtifactCard = (artifact, artifactList, notebookId) => {
+  const renderArtifactCard = (artifact, artifactList, notebookId, notebookDetail) => {
     const isAvailable = artifactList && artifactList.length > 0
     const artifactInfo = ARTIFACT_TYPES.find(a => a.id === artifact)
     const isReport = artifact === 'report'
@@ -269,20 +359,32 @@ function App() {
                 return (
                   <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <span style={{ fontSize: '0.85em', color: '#666' }}>{art.name}</span>
-                    <div style={{ display: 'flex', gap: '4px' }}>
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                       <button
                         className="btn btn-secondary"
-                        style={{ flex: 1, fontSize: '0.8em', padding: '6px 8px' }}
+                        style={{ flex: 1, fontSize: '0.8em', padding: '6px 8px', minWidth: '60px' }}
                         onClick={() => setShowMarkdownModal({ title: art.name, content: art.markdown_content })}
                       >
                         Ver
                       </button>
                       <button
                         className="btn btn-primary"
-                        style={{ flex: 1, fontSize: '0.8em', padding: '6px 8px' }}
+                        style={{ flex: 1, fontSize: '0.8em', padding: '6px 8px', minWidth: '60px' }}
                         onClick={() => handleCopyMarkdown(art.markdown_content, art.id)}
                       >
                         {copiedId === art.id ? '✓ Copiado' : '📋 Copiar'}
+                      </button>
+                      <button
+                        className="btn btn-success"
+                        style={{ flex: 1, fontSize: '0.8em', padding: '6px 8px', minWidth: '60px' }}
+                        onClick={() => handleDownloadMarkdown(
+                          art.markdown_content, 
+                          art.name || 'report',
+                          notebookDetail?.title,
+                          notebookDetail?.url
+                        )}
+                      >
+                        ⬇️ Descargar
                       </button>
                     </div>
                   </div>
@@ -320,10 +422,13 @@ function App() {
     <div className={isLoading ? 'loading' : ''}>
       <header className="header">
         <div className="header-content">
-          <h1>📚 NotebookLM</h1>
+          <h1 style={{ marginRight: '20px' }}>📚 NotebookLM</h1>
           <div className="auth-status">
             <span className={`auth-badge ${authStatus?.authenticated ? 'authenticated' : 'not-authenticated'}`}>
               {authStatus?.authenticated ? '✓ Autenticado' : '✗ No autenticado'}
+            </span>
+            <span style={{ marginLeft: '12px', fontSize: '0.9em', color: '#FFD700', fontWeight: 'bold' }}>
+              Perfil: {selectedProfile || 'por defecto'}
             </span>
           </div>
         </div>
@@ -389,18 +494,64 @@ function App() {
             </div>
             
             <div className="form-group">
+              <label>Buscar perfil</label>
+              <input 
+                type="text" 
+                value={profileFilter} 
+                onChange={(e) => setProfileFilter(e.target.value)}
+                placeholder="Escribe para buscar..."
+              />
+            </div>
+            
+            <div className="form-group">
               <label>Perfil de Firefox</label>
               <select 
                 value={selectedProfile} 
                 onChange={(e) => setSelectedProfile(e.target.value)}
               >
                 <option value="">Perfil por defecto</option>
-                {profiles.map(p => (
-                  <option key={p.directory_name} value={p.display_name}>
-                    {p.display_name} {p.is_default && '(default)'}
-                  </option>
-                ))}
+                {profiles
+                  .filter(p => !profileFilter || p.display_name.toLowerCase().includes(profileFilter.toLowerCase()))
+                  .map(p => (
+                    <option key={p.directory_name} value={p.display_name}>
+                      {p.display_name} {p.is_default && '(default)'}
+                    </option>
+                  ))
+                }
               </select>
+            </div>
+            
+            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input 
+                  type="checkbox"
+                  checked={useDefaultProfile}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setUseDefaultProfile(checked)
+                    if (checked && selectedProfile) {
+                      localStorage.setItem('notebooklm_default_profile', selectedProfile)
+                    } else if (!checked) {
+                      localStorage.removeItem('notebooklm_default_profile')
+                    }
+                  }}
+                />
+                Usar este perfil por defecto
+              </label>
+              {useDefaultProfile && (
+                <button 
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ padding: '4px 8px', fontSize: '0.8em' }}
+                  onClick={() => {
+                    setUseDefaultProfile(false)
+                    localStorage.removeItem('notebooklm_default_profile')
+                    setSelectedProfile('')
+                  }}
+                >
+                  ✕ Borrar perfil por defecto
+                </button>
+              )}
             </div>
             
             <button 
@@ -519,7 +670,7 @@ function App() {
                       <div className="notebook-actions">
                         <button 
                           className="btn btn-secondary"
-                          onClick={() => loadNotebookDetail(notebook.id)}
+                          onClick={() => { setSuccess(null); loadNotebookDetail(notebook.id) }}
                           disabled={loadingDetail}
                         >
                           {loadingDetail ? 'Cargando...' : 'Ver Detalles'}
@@ -554,8 +705,8 @@ function App() {
           <div className="card">
             {loadingDetail ? (
               <div className="loading">
-                <div className="spinner"></div>
-                <p style={{ marginTop: '16px' }}>Cargando detalles del cuaderno...</p>
+                <div className="spinner" style={{ marginRight: '12px' }}></div>
+                <span>Cargando detalles del cuaderno...</span>
               </div>
             ) : notebookDetail ? (
               <>
@@ -566,6 +717,24 @@ function App() {
                   </button>
                 </div>
                 
+                {notebookDetail.summary && (
+                  <div style={{ marginBottom: '20px', padding: '16px', background: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <h4 style={{ marginTop: 0, marginBottom: 0, color: '#333' }}>Resumen</h4>
+                      <button 
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.8em', padding: '4px 8px' }}
+                        onClick={() => handleCopyMarkdown(notebookDetail.summary, 'summary')}
+                      >
+                        {copiedId === 'summary' ? '✓ Copiado' : '📋 Copiar'}
+                      </button>
+                    </div>
+                    <div className="markdown-content" style={{ fontSize: '0.9em', lineHeight: '1.6' }}>
+                      <ReactMarkdown>{notebookDetail.summary}</ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+                
                 <p style={{ marginBottom: '16px' }}>
                   <a href={notebookDetail.url} target="_blank" rel="noopener noreferrer">
                     {notebookDetail.url}
@@ -575,7 +744,7 @@ function App() {
                 <h3>Artefactos</h3>
                 <div className="artifact-grid">
                   {ARTIFACT_TYPES.map(artifact => 
-                    renderArtifactCard(artifact.id, notebookDetail.artifacts?.[artifact.id], selectedNotebook)
+                    renderArtifactCard(artifact.id, notebookDetail.artifacts?.[artifact.id], selectedNotebook, notebookDetail)
                   )}
                 </div>
                 
@@ -593,6 +762,13 @@ function App() {
                       disabled={loadingDetail}
                     >
                       {loadingDetail ? 'Generando...' : 'Generar todos los faltantes'}
+                    </button>
+                    <button 
+                      className="btn btn-secondary"
+                      onClick={() => { setSuccess(null); loadNotebookDetail(selectedNotebook) }}
+                      style={{ marginLeft: '8px' }}
+                    >
+                      🔄 Actualizar
                     </button>
                   </div>
                 </div>

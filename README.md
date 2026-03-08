@@ -24,13 +24,28 @@ La aplicación estará disponible en: **http://localhost:3000**
 
 ### Características de la interfaz web
 
-- Ver lista de cuadernos con búsqueda y ordenación
+- Ver lista de cuadernos con búsqueda y ordenación (más recientes primero)
 - Crear nuevos cuadernos desde YouTube
 - Ver detalles de cada cuaderno con todos sus artefactos
-- Generar nuevos artefactos
+- **Ver resumen del cuaderno** generado por NotebookLM
+- **Copiar resumen** del cuaderno al portapapeles
 - **Ver informes en HTML** con opción de copiar markdown
+- **Descargar informes en Markdown** con cabecera citas (título + URL)
 - Descargar vídeos, audios, presentaciones e infografías
 - Extraer cookies de Firefox directamente desde la interfaz
+- **Buscador predictivo de perfiles** de Firefox
+- **Guardar perfil por defecto** (se mantiene en el navegador)
+- **Bookmarklet** para crear cuadernos directamente desde YouTube
+
+### Bookmarklet
+
+Crea un marcador en tu navegador con el siguiente código:
+
+```javascript
+javascript:(function(){window.open('http://localhost:3000/#/create?url='+encodeURIComponent(window.location.href),'_blank');})()
+```
+
+Cuando estés viendo un vídeo de YouTube, haz clic en el marcador para abrir la interfaz de creación de cuaderno con la URL del vídeo ya preenchida.
 
 ---
 
@@ -47,6 +62,11 @@ Las dependencias principales son:
 - `notebooklm-py`: API cliente no oficial de NotebookLM
 - `yt-dlp`: Extracción de metadatos de YouTube
 - `rich`: Interfaz de línea de comandos visual (tablas, barras de progreso)
+
+> **IMPORTANTE**: Mantén `yt-dlp` actualizado. YouTube cambia frecuentemente su API y las versiones antiguas pueden fallar con error "400 Bad Request" o "Precondition check failed". Actualiza con:
+> ```bash
+> pip install --upgrade yt-dlp
+> ```
 
 Para el script Bash también necesitas:
 ```bash

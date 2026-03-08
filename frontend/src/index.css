@@ -176,6 +176,15 @@ body.loading * {
   background: #dc2626;
 }
 
+.btn-success {
+  background: #22c55e;
+  color: white;
+}
+
+.btn-success:hover {
+  background: #16a34a;
+}
+
 .btn-group {
   display: flex;
   gap: 12px;

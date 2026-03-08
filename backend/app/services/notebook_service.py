@@ -529,26 +529,42 @@ async def create_notebook_from_youtube(
     if not video_id:
         return {"success": False, "error": "URL de YouTube inválida"}
 
+    logger.info(f"Video ID extracted: {video_id}")
+
+    # Primero verificar si el cuaderno ya existe (sin necesidad de metadatos)
+    logger.info("Checking for existing notebook...")
     try:
-        metadatos = obtener_metadatos_video(youtube_url)
+        async with await NotebookLMClient.from_storage() as client:
+            try:
+                existing_notebook = await buscar_cuaderno_existente(client, video_id)
+                logger.info(f"Existing notebook search result: {existing_notebook}")
+            except Exception as e:
+                logger.error(
+                    f"Error searching for existing notebook: {type(e).__name__}: {e}"
+                )
+                existing_notebook = None
     except Exception as e:
-        logger.error(f"Error getting video metadata: {e}")
-        return {
-            "success": False,
-            "error": f"No se pudo obtener información del vídeo: {youtube_url}",
-        }
+        logger.error(f"Error connecting to NotebookLM: {type(e).__name__}: {e}")
+        existing_notebook = None
 
-    nombre_cuaderno = generar_nombre_cuaderno(metadatos)
+    # Si ya existe, usamos el título del cuaderno existente
+    if existing_notebook:
+        logger.info(f"Notebook already exists: {existing_notebook.id}")
 
-    if artifacts is None:
-        artifacts = list(DEFAULT_ARTIFACTS)
+        # Intentar obtener metadatos, si falla usamos el título existente
+        try:
+            metadatos = obtener_metadatos_video(youtube_url)
+            nombre_cuaderno = generar_nombre_cuaderno(metadatos)
+        except Exception as e:
+            logger.warning(f"Could not get metadata for existing notebook: {e}")
+            nombre_cuaderno = existing_notebook.title or f"YT-{video_id}"
 
-    async with await NotebookLMClient.from_storage() as client:
-        notebook = await buscar_cuaderno_existente(client, video_id)
+        if artifacts is None:
+            artifacts = list(DEFAULT_ARTIFACTS)
 
-        if notebook:
+        async with await NotebookLMClient.from_storage() as client:
             existentes, urls = await verificar_artefactos_existentes(
-                client, notebook.id, language
+                client, existing_notebook.id, language
             )
 
             faltantes = [
@@ -559,33 +575,56 @@ async def create_notebook_from_youtube(
 
             if faltantes:
                 await generar_artefactos(
-                    client, notebook.id, faltantes, language, retardo
+                    client, existing_notebook.id, faltantes, language, retardo
                 )
 
             existentes_final, urls_final = await verificar_artefactos_existentes(
-                client, notebook.id, language
+                client, existing_notebook.id, language
             )
 
-            return {
-                "success": True,
-                "notebook": {
-                    "id": notebook.id,
-                    "title": notebook.title,
-                    "url": f"https://notebooklm.google.com/notebook/{notebook.id}",
-                    "is_existing": True,
-                },
-                "metadata": metadatos,
-                "artifacts": existentes_final,
-            }
+        return {
+            "success": True,
+            "notebook_id": existing_notebook.id,
+            "notebook_name": nombre_cuaderno,
+            "notebook_url": f"https://notebooklm.google.com/notebook/{existing_notebook.id}",
+            "artifacts": existentes_final,
+            "message": f"Cuaderno existente actualizado. Se generaron {len(faltantes)} artefactos nuevos.",
+        }
 
-        notebook = await client.notebooks.create(nombre_cuaderno)
+    # Nuevo cuaderno - obtener metadatos (requerido)
+    logger.info(f"Attempting to get video metadata for: {youtube_url}")
+    try:
+        metadatos = obtener_metadatos_video(youtube_url)
+        logger.info(f"Metadata obtained successfully: {metadatos.get('title')}")
+    except Exception as e:
+        logger.error(f"Error getting video metadata: {type(e).__name__}: {e}")
+        return {
+            "success": False,
+            "error": f"No se pudo obtener información del vídeo (yt-dlp error: {type(e).__name__}). Verifica que la URL sea correcta y accessible: {youtube_url}",
+        }
+
+    nombre_cuaderno = generar_nombre_cuaderno(metadatos)
+
+    if artifacts is None:
+        artifacts = list(DEFAULT_ARTIFACTS)
+
+    async with await NotebookLMClient.from_storage() as client:
+        try:
+            notebook = await client.notebooks.create(nombre_cuaderno)
+        except Exception as e:
+            logger.error(f"Error creating notebook: {e}")
+            return {
+                "success": False,
+                "error": f"Error al crear el cuaderno: {str(e)}. Verifica la autenticación y el límite de cuadernos (máx 100).",
+            }
 
         try:
             await client.sources.add_url(
                 notebook.id, youtube_url, wait=True, wait_timeout=timeout_fuente
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Error adding source to notebook: {e}")
+            # Continuamos aunque falle añadir la fuente
 
         tipos_a_generar = [t for t in ORDEN_ARTEFACTOS if t in artifacts]
         await generar_artefactos(
@@ -598,14 +637,11 @@ async def create_notebook_from_youtube(
 
         return {
             "success": True,
-            "notebook": {
-                "id": notebook.id,
-                "title": notebook.title,
-                "url": f"https://notebooklm.google.com/notebook/{notebook.id}",
-                "is_existing": False,
-            },
-            "metadata": metadatos,
+            "notebook_id": notebook.id,
+            "notebook_name": nombre_cuaderno,
+            "notebook_url": f"https://notebooklm.google.com/notebook/{notebook.id}",
             "artifacts": existentes,
+            "message": "Cuaderno creado correctamente",
         }
 
 
@@ -643,6 +679,29 @@ async def get_notebook_details(
             client, notebook_id, language
         )
 
+        # Get notebook summary
+        summary = None
+        try:
+            summary_raw = await client.notebooks.get_summary(notebook_id)
+            if summary_raw and isinstance(summary_raw, str):
+                # The summary is a string containing a JSON-like array
+                # Format: [["summary text..."]]
+                import ast
+
+                try:
+                    parsed = ast.literal_eval(summary_raw)
+                    if parsed and isinstance(parsed, list) and len(parsed) > 0:
+                        first = parsed[0]
+                        if isinstance(first, list) and len(first) > 0:
+                            summary = first[0]
+                        elif isinstance(first, str):
+                            summary = first
+                except:
+                    # If parsing fails, return the raw string
+                    summary = summary_raw
+        except Exception as e:
+            logger.warning(f"Could not get summary for notebook {notebook_id}: {e}")
+
         return {
             "id": notebook.id,
             "title": notebook.title,
@@ -651,6 +710,7 @@ async def get_notebook_details(
             or getattr(notebook, "create_time", None),
             "artifacts": existentes,
             "artifact_urls": urls,
+            "summary": summary,
         }
 
 

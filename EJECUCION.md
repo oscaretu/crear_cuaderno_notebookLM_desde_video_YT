@@ -19,6 +19,13 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
+> **IMPORTANTE**: Mantén `yt-dlp` actualizado. YouTube cambia frecuentemente su API:
+> ```bash
+> cd backend
+> source venv/bin/activate
+> pip install --upgrade yt-dlp
+> ```
+
 ### Ejecutar el servidor
 
 ```bash
@@ -98,6 +105,58 @@ npm run build
 ```
 
 Los archivos generados estarán en `frontend/dist/`
+
+---
+
+## Características de la Interfaz Web
+
+### Bookmarklet - Crear cuaderno desde YouTube
+
+Para crear un cuaderno rápidamente desde un vídeo de YouTube, usa la URL con parámetro hash:
+
+```
+http://127.0.0.1:3000/#/create?url=https://www.youtube.com/watch?v=VIDEO_ID
+```
+
+**Bookmarklet para el navegador:**
+```javascript
+javascript:(function(){window.open('http://127.0.0.1:3000/#/create?url='+encodeURIComponent(window.location.href),'_blank');})()
+```
+
+### Perfil de Firefox por defecto
+
+1. Ve a la pestaña "Autenticación"
+2. Selecciona un perfil del desplegable
+3. Activa la opción "Usar este perfil por defecto"
+4. El perfil se guardará en el navegador y se usará automáticamente
+
+Para borrar el perfil por defecto, haz clic en "✕ Borrar perfil por defecto".
+
+El perfil actual se muestra en el header de la aplicación.
+
+### Resumen del cuaderno
+
+Al ver los detalles de un cuaderno, se muestra automáticamente el resumen generado por NotebookLM cuando se añadieron las fuentes.
+
+### Copiar y descargar informes
+
+En la sección de artefactos, los informes (report) muestran tres opciones:
+
+- **Ver**: Abre el contenido en un modal con renderizado markdown
+- **Copiar**: Copia el contenido al portapapeles
+- **Descargar**: Guarda el informe como archivo `.md` con:
+  - Cabecera en formato blockquote (cita) indicando el título del cuaderno y la URL
+  - Nombre de archivo: `Título del cuaderno -- Título del informe -- AAAAMMDD_HHMM.md`
+
+Ejemplo de cabecera guardada:
+```
+> Este documento es un informe del cuaderno **Título del cuaderno**
+> [https://notebooklm.google.com/notebook/...](https://notebooklm.google.com/notebook/...)
+```
+
+### Orden de cuadernos
+
+Por defecto, los cuadernos se ordenan por fecha de creación (más recientes primero).
 
 ---
 
