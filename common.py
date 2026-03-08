@@ -18,14 +18,14 @@ from rich import box
 console = Console()
 
 # Constantes para tipos de artefactos (StudioContentType)
-STUDIO_AUDIO = 1
-STUDIO_REPORT = 2
-STUDIO_VIDEO = 3
-STUDIO_QUIZ = 4  # También flashcards (variant distingue)
-STUDIO_MIND_MAP = 5
+STUDIO_AUDIO       = 1
+STUDIO_REPORT      = 2
+STUDIO_VIDEO       = 3
+STUDIO_QUIZ        = 4  # También flashcards (variant distingue)
+STUDIO_MIND_MAP    = 5
 STUDIO_INFOGRAPHIC = 7
-STUDIO_SLIDE_DECK = 8
-STUDIO_DATA_TABLE = 9
+STUDIO_SLIDE_DECK  = 8
+STUDIO_DATA_TABLE  = 9
 
 # Estado completado de artefacto
 ARTIFACT_STATUS_COMPLETED = 3

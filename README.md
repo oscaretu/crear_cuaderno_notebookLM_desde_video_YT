@@ -1,5 +1,7 @@
 # NotebookLM Tools
 
+🇬🇧 [Read in English](README_EN.md)
+
 Herramientas de línea de comandos y interfaz web para automatizar tareas en Google NotebookLM.
 
 ## Interfaz Web (Nuevo)
@@ -37,6 +39,52 @@ La aplicación estará disponible en: **http://localhost:3000**
 - **Guardar perfil por defecto** (se mantiene en el navegador)
 - **Bookmarklet** para crear cuadernos directamente desde YouTube
 
+### Imágenes de la interfaz web
+
+#### Configuración de autenticación
+![Autenticación - Configuración](frontend/images/NotebookLM--Admin--Autenticacion_01.png)
+
+Como primer paso, hay que asegurarse de que el usuario está autenticado. El usuario de Windows se usa para componer la ruta que lleva al directorio de los perfiles de Firefox.
+
+En el selector *Perfil de Firefox* puedes elegir uno entre los distintos perfiles de usuarios que existan. Si quieres que el perfil seleccionado se queda permanente asignado, 
+marca el *checkbox* "Usar este perfil por defecto". Al pulsar el botón "Extraer Cookies", se obtendran las cookies de Google existentes en los ficheros del perfil de Firefox 
+seleccionado y se creará un fichero JSON con las cookies que necesita el módulo de Python *notebooklm*, que es el que se usar para interactuar con Google NotebookLM.
+
+#### Extracción de cookies desde Firefox
+
+Aquí se ve que la extracción de cookies ha funcionado correctamente.
+
+![Autenticación - Extracción de cookies](frontend/images/NotebookLM--Admin--Autenticacion_02.png)
+
+#### Formulario para crear un nuevo cuaderno
+
+En la pestaña "Crear cuaderno" debes indicar la URL del vídeo de YouTube. Tienes una serie de *chechboxes* que puedes marcar para forzar la generación de cada tipo de contenido. 
+Hay unos *checkboxes* que apararecen marcados por defecto (los que tienen unos límites de generación más altos en NotebookLM).
+
+![Crear cuaderno - Formulario](frontend/images/NotebookLM--Admin--Crear_cuaderno_01.png)
+
+#### Resultado tras pulsar el botón *Crear cuaderno* de la captura anterior
+
+La imagen siguiente muestra el estado mientras se ejecuta la creación del cuaderno y se lanza la creación de los tipos de contenidos seleccionados en el formulario anterior.
+
+![Crear cuaderno - Resultado](frontend/images/NotebookLM--Admin--Crear_cuaderno_02.png)
+
+#### Lista de cuadernos
+
+En la pestaña *Cuadernos* se muestran los cuadernos del usuario que esté logado en una ventana de Firefox del perfil de Firefox seleccionado en la pestaña de *Autenticación*.
+
+![Lista de cuadernos del usuario](frontend/images/NotebookLM--Admin--Cuadernos_01.png)
+
+##### Detalles del cuaderno
+
+Cuando se pulsa sobre el botón *Ver Detalles*, se muestra la información de los tipos de contenidos que ya están generados, y los que se pueden generar.
+Para el caso de los informes, se puede *Ver* la representación HTML del mismo, se puede *Copiar al versión Markdown del texto*, o se puede *Descargar* a un
+fichero esa misma versión Markdown (en el encabezado del fichero se incluye una referencia al nombre del cuaderno y a la URL del mismo).
+Si no hay ningún contenido de un determinado tipo, se muestra el botón *Generar*. En el caso de contenidos de tipo Presentación, Infografía, Audio o Vídeo, si hay
+contenido generado, se muestra un botón con el título, y al pulsarlo se inicia la descarga del tipo de fichero correspondiente.
+
+![Detalles del cuadernos](frontend/images/NotebookLM--Admin--Detalles_01.png)
+
 ### Bookmarklet
 
 Crea un marcador en tu navegador con el siguiente código:
@@ -45,7 +93,7 @@ Crea un marcador en tu navegador con el siguiente código:
 javascript:(function(){window.open('http://localhost:3000/#/create?url='+encodeURIComponent(window.location.href),'_blank');})()
 ```
 
-Cuando estés viendo un vídeo de YouTube, haz clic en el marcador para abrir la interfaz de creación de cuaderno con la URL del vídeo ya preenchida.
+Cuando estés viendo un vídeo de YouTube, haz clic en el marcador para abrir la interfaz de creación de cuaderno con la URL del vídeo ya precargada.
 
 ---
 
@@ -75,21 +123,21 @@ sudo apt install jq  # Linux/WSL
 brew install jq      # macOS
 ```
 
-### Autenticación
+### Autenticación desde la línea de comandos
 
 Hay dos formas de autenticarse:
 
-#### Opción 1: Login estándar (abre navegador)
+#### Opción 1: Login estándar (abre una ventana del navegador Chromium)
 
 ```bash
 notebooklm login
 ```
 
-Se abrirá un navegador. Inicia sesión y espera a ver la página principal de NotebookLM, luego presiona ENTER en la terminal.
+Se abrirá un navegador. Debes iniciar sesión y esperar a ver la página principal de NotebookLM; luego presiona ENTER en la terminal.
 
 #### Opción 2: Extraer cookies de Firefox (recomendado para WSL2)
 
-Si ya tienes Firefox abierto con una sesión activa de Google, puedes extraer las cookies sin necesidad de hacer login de nuevo:
+Si ya tienes Firefox abierto con una sesión activa en Google, puedes extraer las cookies sin necesidad de hacer login de nuevo:
 
 ```bash
 python extraer_cookies_firefox.py

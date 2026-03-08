@@ -1,5 +1,7 @@
 # NotebookLM Tools
 
+🇪🇸 [Leer en español](README.md)
+
 Command line tools and web interface to automate Google NotebookLM tasks.
 
 ## Web Interface (New)
@@ -36,6 +38,47 @@ Available at: **http://localhost:3000**
 - **Predictive Firefox profile search**
 - **Save default profile** (persists in browser)
 - **Bookmarklet** to create notebooks directly from YouTube
+
+### Screenshots
+
+#### Authentication settings
+![Authentication - Settings](frontend/images/NotebookLM--Admin--Autenticacion_01.png)
+
+As a first step, make sure the user is authenticated. The Windows username is used to compose the path to the Firefox profiles directory.
+
+In the *Firefox Profile* selector, you can choose from the different user profiles that exist. If you want the selected profile to remain permanently assigned, check the checkbox "Use this profile by default". When clicking the "Extract Cookies" button, the existing Google cookies will be obtained from the Firefox profile files and a JSON file will be created with the cookies required by the Python module *notebooklm*, which is used to interact with Google NotebookLM.
+
+#### Cookie extraction from Firefox
+
+Here you can see that the cookie extraction worked correctly.
+
+![Authentication - Cookie Extraction](frontend/images/NotebookLM--Admin--Autenticacion_02.png)
+
+#### Form to create a new notebook
+
+In the "Create notebook" tab, you must specify the YouTube video URL. You have a series of checkboxes that you can check to force the generation of each content type. There are some checkboxes that appear checked by default (those with higher generation limits in NotebookLM).
+
+![Create Notebook - Form](frontend/images/NotebookLM--Admin--Crear_cuaderno_01.png)
+
+#### Result after clicking the *Create notebook* button
+
+The following image shows the status while the notebook creation is running and the creation of the content types selected in the previous form is launched.
+
+![Create Notebook - Result](frontend/images/NotebookLM--Admin--Crear_cuaderno_02.png)
+
+#### Notebook list
+
+In the *Notebooks* tab, the user's notebooks are displayed in a Firefox window for the Firefox profile selected in the *Authentication* tab.
+
+![User's notebook list](frontend/images/NotebookLM--Admin--Cuadernos_01.png)
+
+##### Notebook details
+
+When clicking the *View Details* button, information about the content types that are already generated and those that can be generated is displayed.
+For reports, you can *View* the HTML representation, *Copy* the Markdown version of the text, or *Download* that same Markdown file (the file header includes a reference to the notebook name and its URL).
+If there's no content of a certain type, the *Generate* button is shown. For Presentation, Infographic, Audio, or Video content types, if content has been generated, a button with the title is shown, and clicking it initiates the download of the corresponding file type.
+
+![Notebook details](frontend/images/NotebookLM--Admin--Detalles_01.png)
 
 ### Bookmarklet
 
@@ -75,17 +118,17 @@ sudo apt install jq  # Linux/WSL
 brew install jq      # macOS
 ```
 
-### Authentication
+### Authentication from the command line
 
 There are two ways to authenticate:
 
-#### Option 1: Standard login (opens browser)
+#### Option 1: Standard login (opens Chromium browser)
 
 ```bash
 notebooklm login
 ```
 
-A browser will open. Sign in and wait for the NotebookLM main page, then press ENTER in the terminal.
+A browser will open. You must sign in and wait for the NotebookLM main page; then press ENTER in the terminal.
 
 #### Option 2: Extract Firefox cookies (recommended for WSL2)
 

@@ -160,16 +160,16 @@ REQUIRED_COOKIES = {'SID'}
 # {user} se reemplaza por el nombre de usuario
 
 # Ruta en WSL (Linux accediendo a Windows via /mnt/c/)
-FIREFOX_PROFILES_WSL = "/mnt/c/Users/{user}/AppData/Roaming/Mozilla/Firefox/Profiles"
+FIREFOX_PROFILES_WSL     = "/mnt/c/Users/{user}/AppData/Roaming/Mozilla/Firefox/Profiles"
 
 # Ruta en Windows nativo (PowerShell, CMD)
 FIREFOX_PROFILES_WINDOWS = r"C:\Users\{user}\AppData\Roaming\Mozilla\Firefox\Profiles"
 
 # Ruta en Linux nativo (Firefox instalado en Linux)
-FIREFOX_PROFILES_LINUX = "/home/{user}/.mozilla/firefox"
+FIREFOX_PROFILES_LINUX   = "/home/{user}/.mozilla/firefox"
 
 # Ruta en macOS
-FIREFOX_PROFILES_MACOS = "/Users/{user}/Library/Application Support/Firefox/Profiles"
+FIREFOX_PROFILES_MACOS   = "/Users/{user}/Library/Application Support/Firefox/Profiles"
 
 
 def detectar_plataforma() -> str:
