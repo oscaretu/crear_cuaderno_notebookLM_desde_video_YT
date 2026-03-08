@@ -37,6 +37,20 @@ La aplicación estará disponible en: **http://localhost:3000**
 - **Guardar perfil por defecto** (se mantiene en el navegador)
 - **Bookmarklet** para crear cuadernos directamente desde YouTube
 
+### Imágenes
+
+![Autenticación - Configuración](frontend/images/NotebookLM--Admin--Autenticacion_01.png)
+*Configuración de autenticación*
+
+![Autenticación - Extracción de cookies](frontend/images/NotebookLM--Admin--Autenticacion_02.png)
+*Extracción de cookies desde Firefox*
+
+![Crear cuaderno - Formulario](frontend/images/NotebookLM--Admin--Crear_cuaderno_01.png)
+*Formulario para crear un nuevo cuaderno*
+
+![Crear cuaderno - Resultado](frontend/images/NotebookLM--Admin--Crear_cuaderno_02.png)
+*Resultado tras crear el cuaderno*
+
 ### Bookmarklet
 
 Crea un marcador en tu navegador con el siguiente código:

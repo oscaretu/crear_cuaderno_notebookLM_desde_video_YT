@@ -37,6 +37,20 @@ Available at: **http://localhost:3000**
 - **Save default profile** (persists in browser)
 - **Bookmarklet** to create notebooks directly from YouTube
 
+### Screenshots
+
+![Authentication - Settings](frontend/images/NotebookLM--Admin--Autenticacion_01.png)
+*Authentication settings*
+
+![Authentication - Cookie Extraction](frontend/images/NotebookLM--Admin--Autenticacion_02.png)
+*Cookie extraction from Firefox*
+
+![Create Notebook - Form](frontend/images/NotebookLM--Admin--Crear_cuaderno_01.png)
+*Form to create a new notebook*
+
+![Create Notebook - Result](frontend/images/NotebookLM--Admin--Crear_cuaderno_02.png)
+*Result after creating the notebook*
+
 ### Bookmarklet
 
 Create a bookmark in your browser with the following code:

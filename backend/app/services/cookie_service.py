@@ -10,10 +10,10 @@ from typing import Optional
 from app.core.config import settings
 
 
-FIREFOX_PROFILES_WSL = "/mnt/c/Users/{user}/AppData/Roaming/Mozilla/Firefox/Profiles"
+FIREFOX_PROFILES_WSL     = "/mnt/c/Users/{user}/AppData/Roaming/Mozilla/Firefox/Profiles"
 FIREFOX_PROFILES_WINDOWS = r"C:\Users\{user}\AppData\Roaming\Mozilla\Firefox\Profiles"
-FIREFOX_PROFILES_LINUX = "/home/{user}/.mozilla/firefox"
-FIREFOX_PROFILES_MACOS = "/Users/{user}/Library/Application Support/Firefox/Profiles"
+FIREFOX_PROFILES_LINUX   = "/home/{user}/.mozilla/firefox"
+FIREFOX_PROFILES_MACOS   = "/Users/{user}/Library/Application Support/Firefox/Profiles"
 
 ALLOWED_DOMAINS = {
     ".google.com",
