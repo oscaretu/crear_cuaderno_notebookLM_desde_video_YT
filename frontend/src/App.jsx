@@ -422,7 +422,7 @@ function App() {
     <div className={isLoading ? 'loading' : ''}>
       <header className="header">
         <div className="header-content">
-          <h1 style={{ marginRight: '20px' }}>📚 NotebookLM</h1>
+          <h1 style={{ marginRight: '20px' }}>📚 MyNotebookLM</h1>
           <div className="auth-status">
             <span className={`auth-badge ${authStatus?.authenticated ? 'authenticated' : 'not-authenticated'}`}>
               {authStatus?.authenticated ? '✓ Autenticado' : '✗ No autenticado'}
@@ -658,7 +658,7 @@ function App() {
                     <div key={notebook.id} className="notebook-item">
                       <div className="notebook-info">
                         <h3><span style={{ color: '#667eea', fontWeight: 'normal' }}>#{index + 1}</span> {notebook.title}</h3>
-                        <p>{notebook.url}</p>
+                        <p><a href={notebook.url} target="_blank" rel="noopener noreferrer">{notebook.url}</a></p>
                         {notebook.created_at && (
                           <p style={{ fontSize: '0.8rem', color: '#888' }}>
                             📅 {new Date(notebook.created_at).toLocaleDateString('es-ES', { 
@@ -696,7 +696,14 @@ function App() {
           <div className="card">
             <div className="empty-state">
               <h3>No hay cuadernos</h3>
-              <p>Crea tu primer cuaderno desde la pestaña "Crear Cuaderno"</p>
+              {!authStatus?.authenticated ? (
+                <>
+                  <p>Autentícate primero para ver tus cuadernos existentes.</p>
+                  <p>Si no tienes cuadernos, autentícate y crea uno desde la pestaña "Crear Cuaderno"</p>
+                </>
+              ) : (
+                <p>Crea tu primer cuaderno desde la pestaña "Crear Cuaderno"</p>
+              )}
             </div>
           </div>
         )}
