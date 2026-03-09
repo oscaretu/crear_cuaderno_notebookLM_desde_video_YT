@@ -51,6 +51,63 @@ ORDEN_ARTEFACTOS = [
 
 DEFAULT_ARTIFACTS = {"report", "mind_map", "data_table", "quiz", "flashcards"}
 
+MAX_AUTH_RETRIES = 2
+
+
+def is_auth_error(exception: Exception) -> bool:
+    error_msg = str(exception).lower()
+    auth_indicators = [
+        "authentication expired",
+        "auth expired",
+        "cookie",
+        "invalid credentials",
+        "login required",
+        "not authenticated",
+        "unauthorized",
+        "401",
+    ]
+    return any(indicator in error_msg for indicator in auth_indicators)
+
+
+async def refresh_cookies_and_retry(operation_func, *args, **kwargs):
+    from app.services import cookie_service
+
+    last_error = None
+    for attempt in range(MAX_AUTH_RETRIES + 1):
+        try:
+            return await operation_func(*args, **kwargs)
+        except Exception as e:
+            last_error = e
+            if is_auth_error(e) and attempt < MAX_AUTH_RETRIES:
+                logger.warning(
+                    f"Auth error detected (attempt {attempt + 1}/{MAX_AUTH_RETRIES + 1}): {e}"
+                )
+                logger.info("Attempting to refresh cookies from Firefox...")
+
+                try:
+                    result = cookie_service.extract_cookies(
+                        usuario="oscar",
+                        nombre_perfil=None,
+                        output_path=str(settings.storage_state_path),
+                        dry_run=False,
+                    )
+                    if result.get("success"):
+                        logger.info(
+                            f"Cookies refreshed successfully: {result.get('message')}"
+                        )
+                    else:
+                        logger.error(
+                            f"Failed to refresh cookies: {result.get('message')}"
+                        )
+                        break
+                except Exception as refresh_error:
+                    logger.error(f"Error refreshing cookies: {refresh_error}")
+                    break
+            else:
+                raise
+
+    raise last_error
+
 
 def extraer_video_id(url: str) -> Optional[str]:
     parsed = urlparse(url)
@@ -646,72 +703,102 @@ async def create_notebook_from_youtube(
 
 
 async def get_notebooks() -> list[dict]:
-    async with await NotebookLMClient.from_storage() as client:
-        notebooks = await client.notebooks.list()
-        return [
-            {
-                "id": nb.id,
-                "title": nb.title,
-                "url": f"https://notebooklm.google.com/notebook/{nb.id}",
-                "created_at": getattr(nb, "created_at", None)
-                or getattr(nb, "create_time", None),
-            }
-            for nb in notebooks
-        ]
+    logger.debug("=== get_notebooks() called ===")
+    logger.debug(f"Storage path: {settings.storage_state_path}")
+    logger.debug(f"Storage exists: {settings.storage_state_path.exists()}")
+
+    async def _fetch_notebooks():
+        client = await NotebookLMClient.from_storage()
+        logger.debug("NotebookLMClient created, fetching notebooks...")
+        async with client:
+            notebooks = await client.notebooks.list()
+            logger.debug(f"Found {len(notebooks)} notebooks")
+            return [
+                {
+                    "id": nb.id,
+                    "title": nb.title,
+                    "url": f"https://notebooklm.google.com/notebook/{nb.id}",
+                    "created_at": getattr(nb, "created_at", None)
+                    or getattr(nb, "create_time", None),
+                }
+                for nb in notebooks
+            ]
+
+    try:
+        return await refresh_cookies_and_retry(_fetch_notebooks)
+    except Exception as e:
+        logger.error(f"Error in get_notebooks(): {type(e).__name__}: {e}")
+        import traceback
+
+        logger.error(traceback.format_exc())
+        raise
 
 
 async def get_notebook_details(
     notebook_id: str, language: str = "es"
 ) -> Optional[dict]:
-    async with await NotebookLMClient.from_storage() as client:
-        notebooks = await client.notebooks.list()
+    logger.debug(f"=== get_notebook_details({notebook_id}) called ===")
+    logger.debug(f"Language: {language}")
 
-        notebook = None
-        for nb in notebooks:
-            if nb.id == notebook_id:
-                notebook = nb
-                break
+    try:
+        client = await NotebookLMClient.from_storage()
+        async with client:
+            logger.debug("NotebookLMClient created, fetching notebook list...")
+            notebooks = await client.notebooks.list()
+            logger.debug(f"Found {len(notebooks)} notebooks")
 
-        if not notebook:
-            return None
+            notebook = None
+            for nb in notebooks:
+                if nb.id == notebook_id:
+                    notebook = nb
+                    logger.debug(f"Found notebook: {nb.title}")
+                    break
 
-        existentes, urls = await verificar_artefactos_existentes(
-            client, notebook_id, language
+            if not notebook:
+                logger.debug(f"Notebook {notebook_id} not found")
+                return None
+
+            existentes, urls = await verificar_artefactos_existentes(
+                client, notebook_id, language
+            )
+
+            summary = None
+            try:
+                summary_raw = await client.notebooks.get_summary(notebook_id)
+                if summary_raw and isinstance(summary_raw, str):
+                    import ast
+
+                    try:
+                        parsed = ast.literal_eval(summary_raw)
+                        if parsed and isinstance(parsed, list) and len(parsed) > 0:
+                            first = parsed[0]
+                            if isinstance(first, list) and len(first) > 0:
+                                summary = first[0]
+                            elif isinstance(first, str):
+                                summary = first
+                    except:
+                        summary = summary_raw
+            except Exception as e:
+                logger.warning(f"Could not get summary for notebook {notebook_id}: {e}")
+
+            return {
+                "id": notebook.id,
+                "title": notebook.title,
+                "url": f"https://notebooklm.google.com/notebook/{notebook.id}",
+                "created_at": getattr(notebook, "created_at", None)
+                or getattr(notebook, "create_time", None),
+                "artifacts": existentes,
+                "artifact_urls": urls,
+                "summary": summary,
+            }
+    except Exception as e:
+        logger.error(
+            f"Error in get_notebook_details({notebook_id}): {type(e).__name__}: {e}"
         )
+        import traceback
 
-        # Get notebook summary
-        summary = None
-        try:
-            summary_raw = await client.notebooks.get_summary(notebook_id)
-            if summary_raw and isinstance(summary_raw, str):
-                # The summary is a string containing a JSON-like array
-                # Format: [["summary text..."]]
-                import ast
-
-                try:
-                    parsed = ast.literal_eval(summary_raw)
-                    if parsed and isinstance(parsed, list) and len(parsed) > 0:
-                        first = parsed[0]
-                        if isinstance(first, list) and len(first) > 0:
-                            summary = first[0]
-                        elif isinstance(first, str):
-                            summary = first
-                except:
-                    # If parsing fails, return the raw string
-                    summary = summary_raw
-        except Exception as e:
-            logger.warning(f"Could not get summary for notebook {notebook_id}: {e}")
-
-        return {
-            "id": notebook.id,
-            "title": notebook.title,
-            "url": f"https://notebooklm.google.com/notebook/{notebook.id}",
-            "created_at": getattr(notebook, "created_at", None)
-            or getattr(notebook, "create_time", None),
-            "artifacts": existentes,
-            "artifact_urls": urls,
-            "summary": summary,
-        }
+        logger.error(traceback.format_exc())
+        raise
 
 
 async def generate_artifacts(

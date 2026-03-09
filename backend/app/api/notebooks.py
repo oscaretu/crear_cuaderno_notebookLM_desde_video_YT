@@ -130,6 +130,16 @@ async def list_notebooks():
         notebooks = await notebook_service.get_notebooks()
         return notebooks
     except Exception as e:
+        error_msg = str(e)
+        if notebook_service.is_auth_error(e):
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "error": "authentication_expired",
+                    "message": "Las cookies de autenticación han expirado. Intenta extraer nuevas cookies desde Firefox.",
+                    "details": error_msg[:200],
+                },
+            )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -148,6 +158,15 @@ async def get_notebook(notebook_id: str, language: str = "es"):
         raise
     except Exception as e:
         logger.error(f"Error getting notebook {notebook_id}: {e}")
+        if notebook_service.is_auth_error(e):
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "error": "authentication_expired",
+                    "message": "Las cookies de autenticación han expirado. Intenta extraer nuevas cookies.",
+                    "details": str(e)[:200],
+                },
+            )
         raise HTTPException(status_code=500, detail=str(e))
 
 
