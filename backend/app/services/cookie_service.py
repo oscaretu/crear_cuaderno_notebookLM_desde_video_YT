@@ -3,17 +3,20 @@ import json
 import shutil
 import sqlite3
 import tempfile
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
 
-FIREFOX_PROFILES_WSL     = "/mnt/c/Users/{user}/AppData/Roaming/Mozilla/Firefox/Profiles"
+
+FIREFOX_PROFILES_WSL = "/mnt/c/Users/{user}/AppData/Roaming/Mozilla/Firefox/Profiles"
 FIREFOX_PROFILES_WINDOWS = r"C:\Users\{user}\AppData\Roaming\Mozilla\Firefox\Profiles"
-FIREFOX_PROFILES_LINUX   = "/home/{user}/.mozilla/firefox"
-FIREFOX_PROFILES_MACOS   = "/Users/{user}/Library/Application Support/Firefox/Profiles"
+FIREFOX_PROFILES_LINUX = "/home/{user}/.mozilla/firefox"
+FIREFOX_PROFILES_MACOS = "/Users/{user}/Library/Application Support/Firefox/Profiles"
 
 ALLOWED_DOMAINS = {
     ".google.com",
@@ -253,17 +256,29 @@ def extract_cookies(
     output_path: str = None,
     dry_run: bool = False,
 ) -> dict:
+    logger.debug(
+        f"[extract_cookies] Usuario: {usuario}, Perfil: {nombre_perfil}, Dry run: {dry_run}"
+    )
+
     plataforma = detectar_plataforma()
+    logger.debug(f"[extract_cookies] Plataforma detectada: {plataforma}")
+
     perfil = encontrar_perfil(usuario, nombre_perfil)
+    logger.debug(f"[extract_cookies] Perfil encontrado: {perfil}")
+
     nombre_bonito = extraer_nombre_bonito(perfil.name)
+    logger.debug(f"[extract_cookies] Nombre bonito: {nombre_bonito}")
 
     temp_db = copiar_cookies_db(perfil)
+    logger.debug(f"[extract_cookies] Base de datos de cookies copiada a: {temp_db}")
 
     try:
         cookies = extraer_cookies_google(temp_db)
+        logger.debug(f"[extract_cookies] Extraídas {len(cookies)} cookies de Google")
 
         ok, faltantes = verificar_cookies_minimas(cookies)
         if not ok:
+            logger.debug(f"[extract_cookies] Faltan cookies requeridas: {faltantes}")
             return {
                 "success": False,
                 "message": f"Faltan cookies requeridas: {', '.join(faltantes)}",
@@ -271,6 +286,9 @@ def extract_cookies(
             }
 
         if dry_run:
+            logger.debug(
+                f"[extract_cookies] Dry run completado: {len(cookies)} cookies"
+            )
             return {
                 "success": True,
                 "message": f"Dry run: {len(cookies)} cookies encontradas",
@@ -278,21 +296,29 @@ def extract_cookies(
             }
 
         storage_state = generar_storage_state(cookies, perfil.name, nombre_bonito)
+        logger.debug(
+            f"[extract_cookies] Storage state generado con {len(cookies)} cookies"
+        )
 
         if output_path is None:
             output_path = str(settings.storage_state_path)
+            logger.debug(f"[extract_cookies] Usando path por defecto: {output_path}")
 
         output = Path(output_path)
         output.parent.mkdir(parents=True, exist_ok=True)
+        logger.debug(f"[extract_cookies] Directorio output preparado: {output.parent}")
 
         if output.exists():
             backup = output.with_suffix(".json.bak")
             shutil.copy2(output, backup)
+            logger.debug(f"[extract_cookies] Backup creado: {backup}")
 
         with open(output, "w") as f:
             json.dump(storage_state, f, indent=2)
+        logger.debug(f"[extract_cookies] Cookies guardadas en: {output}")
 
         output.chmod(0o600)
+        logger.debug(f"[extract_cookies] Permisos establecidos: 0o600")
 
         return {
             "success": True,
@@ -302,6 +328,7 @@ def extract_cookies(
 
     finally:
         temp_db.unlink(missing_ok=True)
+        logger.debug(f"[extract_cookies] Archivo temporal eliminado")
 
 
 def check_auth_status() -> dict:
