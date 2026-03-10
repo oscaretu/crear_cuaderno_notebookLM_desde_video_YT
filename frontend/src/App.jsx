@@ -1,6 +1,63 @@
 import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { api } from './services/api'
+
+function parseMarkdownTable(code) {
+  const lines = code.trim().split('\n')
+  if (lines.length < 2) return null
+  
+  const rows = lines.map(line => {
+    const cells = line.trim().split('|').map(cell => cell.trim())
+    if (cells[0] === '') cells.shift()
+    if (cells[cells.length - 1] === '') cells.pop()
+    return cells
+  })
+  if (rows.length < 2) return null
+  
+  const headerRow = rows[0]
+  const dataRows = rows.slice(2)
+  
+  if (headerRow.length < 2 || dataRows.length === 0) return null
+  
+  const separatorRow = rows[1]
+  if (!separatorRow.every(cell => cell.match(/^:?-+:?$/))) return null
+  
+  return { headers: headerRow, rows: dataRows }
+}
+
+function CodeBlockRenderer({ children, className }) {
+  const code = String(children).replace(/\n$/, '')
+  const language = className?.replace('language-', '') || ''
+  
+  if (language === 'markdown' || language === '' || language === 'table') {
+    const table = parseMarkdownTable(code)
+    if (table) {
+      return (
+        <table className="markdown-table">
+          <thead>
+            <tr>
+              {table.headers.map((header, i) => (
+                <th key={i}>{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {table.rows.map((row, i) => (
+              <tr key={i}>
+                {row.map((cell, j) => (
+                  <td key={j}>{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )
+    }
+  }
+  
+  return <code className={className}>{children}</code>
+}
 
 const ARTIFACT_TYPES = [
   { id: 'report', name: 'Informe', limited: false },
@@ -737,7 +794,7 @@ function App() {
                       </button>
                     </div>
                     <div className="markdown-content" style={{ fontSize: '0.9em', lineHeight: '1.6' }}>
-                      <ReactMarkdown>{notebookDetail.summary}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlockRenderer }}>{notebookDetail.summary}</ReactMarkdown>
                     </div>
                   </div>
                 )}
@@ -802,7 +859,7 @@ function App() {
               <button className="modal-close" onClick={() => setShowMarkdownModal(null)}>×</button>
             </div>
             <div className="modal-body markdown-content">
-              <ReactMarkdown>{showMarkdownModal.content}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlockRenderer }}>{showMarkdownModal.content}</ReactMarkdown>
             </div>
             <div className="modal-footer">
               <button 
